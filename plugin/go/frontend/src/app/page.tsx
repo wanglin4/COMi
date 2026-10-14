@@ -11,7 +11,7 @@ export default function Home() {
   }, [silentReconnect]);
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-6 gap-6">
+    <main className="flex min-h-screen flex-col items-center justify-center p-6 pt-24 pb-20 gap-6">
       <div className="glass-card p-8 w-full max-w-md animate-fade-up opacity-0">
         <h1 className="text-2xl font-bold mb-4 bg-gradient-to-r from-emerald-400 to-indigo-500 bg-clip-text text-transparent">
           COMi Markets
