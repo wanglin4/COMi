@@ -19,6 +19,15 @@ interface WalletState {
   disconnect: () => void;
 }
 
+async function waitForEthereum(timeoutMs = 3000): Promise<any> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (window.ethereum) return window.ethereum;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return window.ethereum ?? null;
+}
+
 const AUTHORITY_ADDRESS = process.env.NEXT_PUBLIC_AUTHORITY_ADDRESS?.toLowerCase() || "";
 
 export const useWalletStore = create<WalletState>((set, get) => ({
@@ -31,12 +40,13 @@ export const useWalletStore = create<WalletState>((set, get) => ({
   connect: async () => {
     set({ isConnecting: true, error: null });
     try {
-      if (!window.ethereum) throw new Error("Wallet extension not found");
-      const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+      const provider = await waitForEthereum(3000);
+      if (!provider) throw new Error("Wallet extension not found");
+      const accounts = await provider.request({ method: "eth_requestAccounts" });
       const ethAddress = accounts[0].toLowerCase();
       
       const msg = "Sign this message to derive your COMi prediction market key.";
-      const signature = await window.ethereum.request({
+      const signature = await provider.request({
         method: "personal_sign",
         params: [msg, ethAddress],
       });
