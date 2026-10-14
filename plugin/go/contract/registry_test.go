@@ -220,8 +220,15 @@ func TestSetGateAndRequireAllowed(t *testing.T) {
 	if err := RequireAllowed(st, 2, []byte{1}); err == nil {
 		t.Fatal("open gate must still reject malformed addresses")
 	}
-	if r := c.DeliverSetGate(&MessageSetGate{AssetId: 0, Address: user, Allowed: true}, 10, ""); r.Error == nil {
-		t.Fatal("asset id 0 must be rejected")
+	// asset id 0 is the cUSD allowlist, which has no registry record
+	if r := c.DeliverSetGate(&MessageSetGate{AssetId: CUSDGateID, Address: user, Allowed: true}, 10, ""); r.Error != nil {
+		t.Fatalf("cUSD gate id must be accepted: %v", r.Error)
+	}
+	if err := RequireAllowed(st, CUSDGateID, user); err != nil {
+		t.Fatalf("cUSD allowlisted address rejected: %v", err)
+	}
+	if err := RequireAllowed(st, CUSDGateID, addr(6)); err == nil {
+		t.Fatal("non-listed address must not pass the cUSD gate")
 	}
 	if r := c.DeliverSetGate(&MessageSetGate{AssetId: 1, Address: []byte{1}, Allowed: true}, 10, ""); r.Error == nil {
 		t.Fatal("short address must be rejected")

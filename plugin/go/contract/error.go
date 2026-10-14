@@ -118,3 +118,59 @@ func ErrRegistryFull() *PluginError {
 func ErrGateNotAllowlist() *PluginError {
 	return NewError(25, DefaultModule, "asset does not use an allowlist gate")
 }
+
+func ErrParamsNotSet() *PluginError {
+	return NewError(26, DefaultModule, "cUSD parameters have not been set by the admin")
+}
+
+func ErrInvalidParams() *PluginError {
+	return NewError(27, DefaultModule, "cUSD parameters are invalid")
+}
+
+func ErrPriceNotSet() *PluginError {
+	return NewError(28, DefaultModule, "the CNPY price has not been posted")
+}
+
+func ErrPriceStale() *PluginError {
+	return NewError(29, DefaultModule, "the CNPY price is stale; the admin must post a fresh price")
+}
+
+func ErrInvalidPrice() *PluginError {
+	return NewError(30, DefaultModule, "price must be greater than zero and below the maximum")
+}
+
+func ErrPriceMoveTooLarge() *PluginError {
+	return NewError(31, DefaultModule, "price update exceeds the maximum allowed move")
+}
+
+func ErrSupplyCapExceeded() *PluginError {
+	return NewError(32, DefaultModule, "cUSD supply cap exceeded")
+}
+
+func ErrUndercollateralized() *PluginError {
+	return NewError(33, DefaultModule, "operation would leave the vault below the minimum collateral ratio")
+}
+
+func ErrVaultHealthy() *PluginError {
+	return NewError(34, DefaultModule, "vault is above the liquidation ratio")
+}
+
+func ErrInsufficientCollateral() *PluginError {
+	return NewError(35, DefaultModule, "insufficient collateral in vault")
+}
+
+func ErrInsufficientCUSD() *PluginError {
+	return NewError(36, DefaultModule, "insufficient cUSD balance")
+}
+
+func ErrInsufficientDebt() *PluginError {
+	return NewError(37, DefaultModule, "amount exceeds the vault's debt")
+}
+
+func ErrSelfTransfer() *PluginError {
+	return NewError(38, DefaultModule, "the two addresses must differ")
+}
+
+func ErrLiquidationTooLarge() *PluginError {
+	return NewError(39, DefaultModule, "liquidation would seize more collateral than the vault holds")
+}

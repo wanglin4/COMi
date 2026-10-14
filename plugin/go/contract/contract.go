@@ -22,19 +22,32 @@ import (
 
 // PluginConfig: the configuration of the contract
 var ContractConfig = &PluginConfig{
-	Name:                  "comi",
-	Id:                    1,
-	Version:               1,
-	SupportedTransactions: []string{"send", "register_asset", "set_gate"},
+	Name:    "comi",
+	Id:      1,
+	Version: 1,
+	SupportedTransactions: []string{"send", "register_asset", "set_gate", "set_cusd_params", "post_price",
+		"vault_deposit", "vault_withdraw", "cusd_mint", "cusd_burn", "cusd_transfer", "liquidate"},
 	// NOTE: SupportedTransactions and TransactionTypeUrls are aligned by index
 	TransactionTypeUrls: []string{
 		"type.googleapis.com/types.MessageSend",
 		"type.googleapis.com/types.MessageRegisterAsset",
 		"type.googleapis.com/types.MessageSetGate",
+		"type.googleapis.com/types.MessageSetCUSDParams",
+		"type.googleapis.com/types.MessagePostPrice",
+		"type.googleapis.com/types.MessageVaultDeposit",
+		"type.googleapis.com/types.MessageVaultWithdraw",
+		"type.googleapis.com/types.MessageCUSDMint",
+		"type.googleapis.com/types.MessageCUSDBurn",
+		"type.googleapis.com/types.MessageCUSDTransfer",
+		"type.googleapis.com/types.MessageLiquidate",
 	},
 	EventTypeUrls: []string{
 		"type.googleapis.com/types.EventAssetRegistered",
 		"type.googleapis.com/types.EventGateSet",
+		"type.googleapis.com/types.EventPricePosted",
+		"type.googleapis.com/types.EventVaultUpdated",
+		"type.googleapis.com/types.EventCUSDTransfer",
+		"type.googleapis.com/types.EventLiquidated",
 	},
 	CustomStatePrefixes: CustomStatePrefixes(),
 }
@@ -145,6 +158,22 @@ func (c *Contract) CheckTx(request *PluginCheckRequest) *PluginCheckResponse {
 		return c.CheckRegisterAsset(x)
 	case *MessageSetGate:
 		return c.CheckSetGate(x)
+	case *MessageSetCUSDParams:
+		return c.CheckSetCUSDParams(x)
+	case *MessagePostPrice:
+		return c.CheckPostPrice(x)
+	case *MessageVaultDeposit:
+		return c.CheckVaultDeposit(x)
+	case *MessageVaultWithdraw:
+		return c.CheckVaultWithdraw(x)
+	case *MessageCUSDMint:
+		return c.CheckCUSDMint(x)
+	case *MessageCUSDBurn:
+		return c.CheckCUSDBurn(x)
+	case *MessageCUSDTransfer:
+		return c.CheckCUSDTransfer(x)
+	case *MessageLiquidate:
+		return c.CheckLiquidate(x)
 	default:
 		return &PluginCheckResponse{Error: ErrInvalidMessageCast()}
 	}
@@ -169,6 +198,22 @@ func (c *Contract) DeliverTx(request *PluginDeliverRequest) *PluginDeliverRespon
 		return c.DeliverRegisterAsset(x, request.Tx.Fee, request.Tx.Memo)
 	case *MessageSetGate:
 		return c.DeliverSetGate(x, request.Tx.Fee, request.Tx.Memo)
+	case *MessageSetCUSDParams:
+		return c.DeliverSetCUSDParams(x, request.Tx.Fee, request.Tx.Memo)
+	case *MessagePostPrice:
+		return c.DeliverPostPrice(x, request.Tx.Fee, request.Tx.Memo, request.Height)
+	case *MessageVaultDeposit:
+		return c.DeliverVaultDeposit(x, request.Tx.Fee, request.Tx.Memo)
+	case *MessageVaultWithdraw:
+		return c.DeliverVaultWithdraw(x, request.Tx.Fee, request.Tx.Memo, request.Height)
+	case *MessageCUSDMint:
+		return c.DeliverCUSDMint(x, request.Tx.Fee, request.Tx.Memo, request.Height)
+	case *MessageCUSDBurn:
+		return c.DeliverCUSDBurn(x, request.Tx.Fee, request.Tx.Memo)
+	case *MessageCUSDTransfer:
+		return c.DeliverCUSDTransfer(x, request.Tx.Fee, request.Tx.Memo)
+	case *MessageLiquidate:
+		return c.DeliverLiquidate(x, request.Tx.Fee, request.Tx.Memo, request.Height)
 	default:
 		return &PluginDeliverResponse{Error: ErrInvalidMessageCast()}
 	}

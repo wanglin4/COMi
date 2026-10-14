@@ -74,9 +74,7 @@ func ValidateRegisterAsset(msg *MessageRegisterAsset) *PluginError {
 
 // ValidateSetGate() performs the stateless validation of a SetGate message
 func ValidateSetGate(msg *MessageSetGate) *PluginError {
-	if msg.AssetId == 0 {
-		return ErrAssetNotFound()
-	}
+	// asset id 0 (CUSDGateID) is the cUSD allowlist
 	if len(msg.Address) != 20 {
 		return ErrInvalidAddress()
 	}
@@ -201,15 +199,18 @@ func (c *Contract) DeliverSetGate(msg *MessageSetGate, fee uint64, memo string) 
 	if err != nil {
 		return &PluginDeliverResponse{Error: err}
 	}
-	if len(vals[0]) == 0 {
-		return &PluginDeliverResponse{Error: ErrAssetNotFound()}
-	}
-	asset := new(Asset)
-	if err = Unmarshal(vals[0], asset); err != nil {
-		return &PluginDeliverResponse{Error: err}
-	}
-	if asset.GatePolicy != GatePolicy_GATE_POLICY_ALLOWLIST {
-		return &PluginDeliverResponse{Error: ErrGateNotAllowlist()}
+	// the cUSD allowlist (CUSDGateID) has no asset record; every real asset must exist and use an allowlist
+	if msg.AssetId != CUSDGateID {
+		if len(vals[0]) == 0 {
+			return &PluginDeliverResponse{Error: ErrAssetNotFound()}
+		}
+		asset := new(Asset)
+		if err = Unmarshal(vals[0], asset); err != nil {
+			return &PluginDeliverResponse{Error: err}
+		}
+		if asset.GatePolicy != GatePolicy_GATE_POLICY_ALLOWLIST {
+			return &PluginDeliverResponse{Error: ErrGateNotAllowlist()}
+		}
 	}
 	sets, deletes, err := c.feeOps(admin, vals[2], vals[3], fee, memo)
 	if err != nil {

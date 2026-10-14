@@ -57,6 +57,17 @@ func (openGate) Allowed(_ stateIO, _ *Asset, addr []byte) (bool, *PluginError) {
 // RequireAllowed() is the single entry point later transaction types call. It loads the asset,
 // resolves its gate and returns ErrNotAllowed when addr does not pass.
 func RequireAllowed(s stateIO, assetId uint64, addr []byte) *PluginError {
+	// gate id 0 is the cUSD allowlist; it has no registry record and is always an allowlist
+	if assetId == CUSDGateID {
+		ok, err := allowlistGate{}.Allowed(s, &Asset{Id: CUSDGateID}, addr)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return ErrNotAllowed()
+		}
+		return nil
+	}
 	vals, err := s.Read(KeyForAsset(assetId))
 	if err != nil {
 		return err

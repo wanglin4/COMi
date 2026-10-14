@@ -596,6 +596,997 @@ func (x *EventGateSet) GetAllowed() bool {
 	return false
 }
 
+// CUSDParams are the admin-set risk parameters. Until they are set, no cUSD operation that needs them can run.
+type CUSDParams struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// supply_cap: maximum total outstanding cUSD debt, in micro-cUSD (0 pauses minting)
+	SupplyCap uint64 `protobuf:"varint,1,opt,name=supply_cap,json=supplyCap,proto3" json:"supplyCap"` // @gotags: json:"supplyCap"
+	// min_collateral_bps: minimum collateral ratio to mint or withdraw, in basis points (>= 15000 = 150%)
+	MinCollateralBps uint32 `protobuf:"varint,2,opt,name=min_collateral_bps,json=minCollateralBps,proto3" json:"minCollateralBps"` // @gotags: json:"minCollateralBps"
+	// liquidation_bps: a vault below this ratio can be liquidated (must be below min_collateral_bps)
+	LiquidationBps uint32 `protobuf:"varint,3,opt,name=liquidation_bps,json=liquidationBps,proto3" json:"liquidationBps"` // @gotags: json:"liquidationBps"
+	// liquidation_penalty_bps: bonus the liquidator receives, in basis points
+	LiquidationPenaltyBps uint32 `protobuf:"varint,4,opt,name=liquidation_penalty_bps,json=liquidationPenaltyBps,proto3" json:"liquidationPenaltyBps"` // @gotags: json:"liquidationPenaltyBps"
+	// max_price_age: the price is stale after this many blocks and blocks mint, withdraw and liquidate
+	MaxPriceAge uint64 `protobuf:"varint,5,opt,name=max_price_age,json=maxPriceAge,proto3" json:"maxPriceAge"` // @gotags: json:"maxPriceAge"
+	// max_price_move_bps: the largest allowed change per price update, in basis points
+	MaxPriceMoveBps uint32 `protobuf:"varint,6,opt,name=max_price_move_bps,json=maxPriceMoveBps,proto3" json:"maxPriceMoveBps"` // @gotags: json:"maxPriceMoveBps"
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *CUSDParams) Reset() {
+	*x = CUSDParams{}
+	mi := &file_comi_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CUSDParams) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CUSDParams) ProtoMessage() {}
+
+func (x *CUSDParams) ProtoReflect() protoreflect.Message {
+	mi := &file_comi_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CUSDParams.ProtoReflect.Descriptor instead.
+func (*CUSDParams) Descriptor() ([]byte, []int) {
+	return file_comi_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *CUSDParams) GetSupplyCap() uint64 {
+	if x != nil {
+		return x.SupplyCap
+	}
+	return 0
+}
+
+func (x *CUSDParams) GetMinCollateralBps() uint32 {
+	if x != nil {
+		return x.MinCollateralBps
+	}
+	return 0
+}
+
+func (x *CUSDParams) GetLiquidationBps() uint32 {
+	if x != nil {
+		return x.LiquidationBps
+	}
+	return 0
+}
+
+func (x *CUSDParams) GetLiquidationPenaltyBps() uint32 {
+	if x != nil {
+		return x.LiquidationPenaltyBps
+	}
+	return 0
+}
+
+func (x *CUSDParams) GetMaxPriceAge() uint64 {
+	if x != nil {
+		return x.MaxPriceAge
+	}
+	return 0
+}
+
+func (x *CUSDParams) GetMaxPriceMoveBps() uint32 {
+	if x != nil {
+		return x.MaxPriceMoveBps
+	}
+	return 0
+}
+
+// PriceRecord is the admin-posted CNPY price.
+type PriceRecord struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// price: micro-cUSD per 1 CNPY
+	Price uint64 `protobuf:"varint,1,opt,name=price,proto3" json:"price,omitempty"`
+	// height: the block height the price was posted at
+	Height        uint64 `protobuf:"varint,2,opt,name=height,proto3" json:"height,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PriceRecord) Reset() {
+	*x = PriceRecord{}
+	mi := &file_comi_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PriceRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PriceRecord) ProtoMessage() {}
+
+func (x *PriceRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_comi_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PriceRecord.ProtoReflect.Descriptor instead.
+func (*PriceRecord) Descriptor() ([]byte, []int) {
+	return file_comi_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *PriceRecord) GetPrice() uint64 {
+	if x != nil {
+		return x.Price
+	}
+	return 0
+}
+
+func (x *PriceRecord) GetHeight() uint64 {
+	if x != nil {
+		return x.Height
+	}
+	return 0
+}
+
+// CUSDSupply is the singleton total of outstanding cUSD debt (equals the sum of all cUSD balances).
+type CUSDSupply struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TotalDebt     uint64                 `protobuf:"varint,1,opt,name=total_debt,json=totalDebt,proto3" json:"totalDebt"` // @gotags: json:"totalDebt"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CUSDSupply) Reset() {
+	*x = CUSDSupply{}
+	mi := &file_comi_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CUSDSupply) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CUSDSupply) ProtoMessage() {}
+
+func (x *CUSDSupply) ProtoReflect() protoreflect.Message {
+	mi := &file_comi_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CUSDSupply.ProtoReflect.Descriptor instead.
+func (*CUSDSupply) Descriptor() ([]byte, []int) {
+	return file_comi_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *CUSDSupply) GetTotalDebt() uint64 {
+	if x != nil {
+		return x.TotalDebt
+	}
+	return 0
+}
+
+// CUSDAccount is an address's cUSD balance.
+type CUSDAccount struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Amount        uint64                 `protobuf:"varint,1,opt,name=amount,proto3" json:"amount,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CUSDAccount) Reset() {
+	*x = CUSDAccount{}
+	mi := &file_comi_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CUSDAccount) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CUSDAccount) ProtoMessage() {}
+
+func (x *CUSDAccount) ProtoReflect() protoreflect.Message {
+	mi := &file_comi_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CUSDAccount.ProtoReflect.Descriptor instead.
+func (*CUSDAccount) Descriptor() ([]byte, []int) {
+	return file_comi_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *CUSDAccount) GetAmount() uint64 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
+// Vault is an address's collateral position.
+type Vault struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// collateral: uCNPY locked in the collateral pool for this vault
+	Collateral uint64 `protobuf:"varint,1,opt,name=collateral,proto3" json:"collateral,omitempty"`
+	// debt: micro-cUSD owed
+	Debt          uint64 `protobuf:"varint,2,opt,name=debt,proto3" json:"debt,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Vault) Reset() {
+	*x = Vault{}
+	mi := &file_comi_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Vault) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Vault) ProtoMessage() {}
+
+func (x *Vault) ProtoReflect() protoreflect.Message {
+	mi := &file_comi_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Vault.ProtoReflect.Descriptor instead.
+func (*Vault) Descriptor() ([]byte, []int) {
+	return file_comi_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *Vault) GetCollateral() uint64 {
+	if x != nil {
+		return x.Collateral
+	}
+	return 0
+}
+
+func (x *Vault) GetDebt() uint64 {
+	if x != nil {
+		return x.Debt
+	}
+	return 0
+}
+
+// MessageSetCUSDParams replaces the risk parameters. Admin only.
+type MessageSetCUSDParams struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Params        *CUSDParams            `protobuf:"bytes,1,opt,name=params,proto3" json:"params,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageSetCUSDParams) Reset() {
+	*x = MessageSetCUSDParams{}
+	mi := &file_comi_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageSetCUSDParams) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageSetCUSDParams) ProtoMessage() {}
+
+func (x *MessageSetCUSDParams) ProtoReflect() protoreflect.Message {
+	mi := &file_comi_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageSetCUSDParams.ProtoReflect.Descriptor instead.
+func (*MessageSetCUSDParams) Descriptor() ([]byte, []int) {
+	return file_comi_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *MessageSetCUSDParams) GetParams() *CUSDParams {
+	if x != nil {
+		return x.Params
+	}
+	return nil
+}
+
+// MessagePostPrice posts the CNPY price. Admin only; each update is bounded by max_price_move_bps.
+type MessagePostPrice struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Price         uint64                 `protobuf:"varint,1,opt,name=price,proto3" json:"price,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessagePostPrice) Reset() {
+	*x = MessagePostPrice{}
+	mi := &file_comi_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessagePostPrice) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessagePostPrice) ProtoMessage() {}
+
+func (x *MessagePostPrice) ProtoReflect() protoreflect.Message {
+	mi := &file_comi_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessagePostPrice.ProtoReflect.Descriptor instead.
+func (*MessagePostPrice) Descriptor() ([]byte, []int) {
+	return file_comi_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *MessagePostPrice) GetPrice() uint64 {
+	if x != nil {
+		return x.Price
+	}
+	return 0
+}
+
+// MessageVaultDeposit locks uCNPY from the sender into their vault. Gated.
+type MessageVaultDeposit struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FromAddress   []byte                 `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
+	Amount        uint64                 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageVaultDeposit) Reset() {
+	*x = MessageVaultDeposit{}
+	mi := &file_comi_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageVaultDeposit) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageVaultDeposit) ProtoMessage() {}
+
+func (x *MessageVaultDeposit) ProtoReflect() protoreflect.Message {
+	mi := &file_comi_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageVaultDeposit.ProtoReflect.Descriptor instead.
+func (*MessageVaultDeposit) Descriptor() ([]byte, []int) {
+	return file_comi_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *MessageVaultDeposit) GetFromAddress() []byte {
+	if x != nil {
+		return x.FromAddress
+	}
+	return nil
+}
+
+func (x *MessageVaultDeposit) GetAmount() uint64 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
+// MessageVaultWithdraw unlocks uCNPY from the sender's vault. Never gated (exit right).
+type MessageVaultWithdraw struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FromAddress   []byte                 `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
+	Amount        uint64                 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageVaultWithdraw) Reset() {
+	*x = MessageVaultWithdraw{}
+	mi := &file_comi_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageVaultWithdraw) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageVaultWithdraw) ProtoMessage() {}
+
+func (x *MessageVaultWithdraw) ProtoReflect() protoreflect.Message {
+	mi := &file_comi_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageVaultWithdraw.ProtoReflect.Descriptor instead.
+func (*MessageVaultWithdraw) Descriptor() ([]byte, []int) {
+	return file_comi_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *MessageVaultWithdraw) GetFromAddress() []byte {
+	if x != nil {
+		return x.FromAddress
+	}
+	return nil
+}
+
+func (x *MessageVaultWithdraw) GetAmount() uint64 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
+// MessageCUSDMint borrows cUSD against the sender's vault. Gated.
+type MessageCUSDMint struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FromAddress   []byte                 `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
+	Amount        uint64                 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageCUSDMint) Reset() {
+	*x = MessageCUSDMint{}
+	mi := &file_comi_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageCUSDMint) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageCUSDMint) ProtoMessage() {}
+
+func (x *MessageCUSDMint) ProtoReflect() protoreflect.Message {
+	mi := &file_comi_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageCUSDMint.ProtoReflect.Descriptor instead.
+func (*MessageCUSDMint) Descriptor() ([]byte, []int) {
+	return file_comi_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *MessageCUSDMint) GetFromAddress() []byte {
+	if x != nil {
+		return x.FromAddress
+	}
+	return nil
+}
+
+func (x *MessageCUSDMint) GetAmount() uint64 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
+// MessageCUSDBurn repays the sender's debt from their cUSD balance. Never gated (exit right).
+type MessageCUSDBurn struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FromAddress   []byte                 `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
+	Amount        uint64                 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageCUSDBurn) Reset() {
+	*x = MessageCUSDBurn{}
+	mi := &file_comi_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageCUSDBurn) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageCUSDBurn) ProtoMessage() {}
+
+func (x *MessageCUSDBurn) ProtoReflect() protoreflect.Message {
+	mi := &file_comi_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageCUSDBurn.ProtoReflect.Descriptor instead.
+func (*MessageCUSDBurn) Descriptor() ([]byte, []int) {
+	return file_comi_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *MessageCUSDBurn) GetFromAddress() []byte {
+	if x != nil {
+		return x.FromAddress
+	}
+	return nil
+}
+
+func (x *MessageCUSDBurn) GetAmount() uint64 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
+// MessageCUSDTransfer moves cUSD between two gated addresses.
+type MessageCUSDTransfer struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FromAddress   []byte                 `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
+	ToAddress     []byte                 `protobuf:"bytes,2,opt,name=to_address,json=toAddress,proto3" json:"toAddress"`       // @gotags: json:"toAddress"
+	Amount        uint64                 `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageCUSDTransfer) Reset() {
+	*x = MessageCUSDTransfer{}
+	mi := &file_comi_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageCUSDTransfer) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageCUSDTransfer) ProtoMessage() {}
+
+func (x *MessageCUSDTransfer) ProtoReflect() protoreflect.Message {
+	mi := &file_comi_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageCUSDTransfer.ProtoReflect.Descriptor instead.
+func (*MessageCUSDTransfer) Descriptor() ([]byte, []int) {
+	return file_comi_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *MessageCUSDTransfer) GetFromAddress() []byte {
+	if x != nil {
+		return x.FromAddress
+	}
+	return nil
+}
+
+func (x *MessageCUSDTransfer) GetToAddress() []byte {
+	if x != nil {
+		return x.ToAddress
+	}
+	return nil
+}
+
+func (x *MessageCUSDTransfer) GetAmount() uint64 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
+// MessageLiquidate repays part of an unhealthy vault's debt and seizes collateral plus the penalty. Gated.
+type MessageLiquidate struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FromAddress   []byte                 `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"`  // @gotags: json:"fromAddress"
+	VaultOwner    []byte                 `protobuf:"bytes,2,opt,name=vault_owner,json=vaultOwner,proto3" json:"vaultOwner"`     // @gotags: json:"vaultOwner"
+	RepayAmount   uint64                 `protobuf:"varint,3,opt,name=repay_amount,json=repayAmount,proto3" json:"repayAmount"` // @gotags: json:"repayAmount"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageLiquidate) Reset() {
+	*x = MessageLiquidate{}
+	mi := &file_comi_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageLiquidate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageLiquidate) ProtoMessage() {}
+
+func (x *MessageLiquidate) ProtoReflect() protoreflect.Message {
+	mi := &file_comi_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageLiquidate.ProtoReflect.Descriptor instead.
+func (*MessageLiquidate) Descriptor() ([]byte, []int) {
+	return file_comi_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *MessageLiquidate) GetFromAddress() []byte {
+	if x != nil {
+		return x.FromAddress
+	}
+	return nil
+}
+
+func (x *MessageLiquidate) GetVaultOwner() []byte {
+	if x != nil {
+		return x.VaultOwner
+	}
+	return nil
+}
+
+func (x *MessageLiquidate) GetRepayAmount() uint64 {
+	if x != nil {
+		return x.RepayAmount
+	}
+	return 0
+}
+
+// EventPricePosted is emitted when the price is posted.
+type EventPricePosted struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Price         uint64                 `protobuf:"varint,1,opt,name=price,proto3" json:"price,omitempty"`
+	Height        uint64                 `protobuf:"varint,2,opt,name=height,proto3" json:"height,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EventPricePosted) Reset() {
+	*x = EventPricePosted{}
+	mi := &file_comi_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EventPricePosted) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EventPricePosted) ProtoMessage() {}
+
+func (x *EventPricePosted) ProtoReflect() protoreflect.Message {
+	mi := &file_comi_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EventPricePosted.ProtoReflect.Descriptor instead.
+func (*EventPricePosted) Descriptor() ([]byte, []int) {
+	return file_comi_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *EventPricePosted) GetPrice() uint64 {
+	if x != nil {
+		return x.Price
+	}
+	return 0
+}
+
+func (x *EventPricePosted) GetHeight() uint64 {
+	if x != nil {
+		return x.Height
+	}
+	return 0
+}
+
+// EventVaultUpdated is emitted on deposit, withdraw, mint and burn.
+type EventVaultUpdated struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Action        string                 `protobuf:"bytes,1,opt,name=action,proto3" json:"action,omitempty"` // deposit | withdraw | mint | burn
+	Owner         []byte                 `protobuf:"bytes,2,opt,name=owner,proto3" json:"owner,omitempty"`
+	Amount        uint64                 `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
+	Collateral    uint64                 `protobuf:"varint,4,opt,name=collateral,proto3" json:"collateral,omitempty"`
+	Debt          uint64                 `protobuf:"varint,5,opt,name=debt,proto3" json:"debt,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EventVaultUpdated) Reset() {
+	*x = EventVaultUpdated{}
+	mi := &file_comi_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EventVaultUpdated) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EventVaultUpdated) ProtoMessage() {}
+
+func (x *EventVaultUpdated) ProtoReflect() protoreflect.Message {
+	mi := &file_comi_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EventVaultUpdated.ProtoReflect.Descriptor instead.
+func (*EventVaultUpdated) Descriptor() ([]byte, []int) {
+	return file_comi_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *EventVaultUpdated) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *EventVaultUpdated) GetOwner() []byte {
+	if x != nil {
+		return x.Owner
+	}
+	return nil
+}
+
+func (x *EventVaultUpdated) GetAmount() uint64 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
+func (x *EventVaultUpdated) GetCollateral() uint64 {
+	if x != nil {
+		return x.Collateral
+	}
+	return 0
+}
+
+func (x *EventVaultUpdated) GetDebt() uint64 {
+	if x != nil {
+		return x.Debt
+	}
+	return 0
+}
+
+// EventCUSDTransfer is emitted when cUSD moves between addresses.
+type EventCUSDTransfer struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FromAddress   []byte                 `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
+	ToAddress     []byte                 `protobuf:"bytes,2,opt,name=to_address,json=toAddress,proto3" json:"toAddress"`       // @gotags: json:"toAddress"
+	Amount        uint64                 `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EventCUSDTransfer) Reset() {
+	*x = EventCUSDTransfer{}
+	mi := &file_comi_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EventCUSDTransfer) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EventCUSDTransfer) ProtoMessage() {}
+
+func (x *EventCUSDTransfer) ProtoReflect() protoreflect.Message {
+	mi := &file_comi_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EventCUSDTransfer.ProtoReflect.Descriptor instead.
+func (*EventCUSDTransfer) Descriptor() ([]byte, []int) {
+	return file_comi_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *EventCUSDTransfer) GetFromAddress() []byte {
+	if x != nil {
+		return x.FromAddress
+	}
+	return nil
+}
+
+func (x *EventCUSDTransfer) GetToAddress() []byte {
+	if x != nil {
+		return x.ToAddress
+	}
+	return nil
+}
+
+func (x *EventCUSDTransfer) GetAmount() uint64 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
+// EventLiquidated is emitted when a vault is (partly) liquidated.
+type EventLiquidated struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	VaultOwner          []byte                 `protobuf:"bytes,1,opt,name=vault_owner,json=vaultOwner,proto3" json:"vaultOwner"` // @gotags: json:"vaultOwner"
+	Liquidator          []byte                 `protobuf:"bytes,2,opt,name=liquidator,proto3" json:"liquidator,omitempty"`
+	Repaid              uint64                 `protobuf:"varint,3,opt,name=repaid,proto3" json:"repaid,omitempty"`
+	SeizedCollateral    uint64                 `protobuf:"varint,4,opt,name=seized_collateral,json=seizedCollateral,proto3" json:"seizedCollateral"`          // @gotags: json:"seizedCollateral"
+	RemainingDebt       uint64                 `protobuf:"varint,5,opt,name=remaining_debt,json=remainingDebt,proto3" json:"remainingDebt"`                   // @gotags: json:"remainingDebt"
+	RemainingCollateral uint64                 `protobuf:"varint,6,opt,name=remaining_collateral,json=remainingCollateral,proto3" json:"remainingCollateral"` // @gotags: json:"remainingCollateral"
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *EventLiquidated) Reset() {
+	*x = EventLiquidated{}
+	mi := &file_comi_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EventLiquidated) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EventLiquidated) ProtoMessage() {}
+
+func (x *EventLiquidated) ProtoReflect() protoreflect.Message {
+	mi := &file_comi_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EventLiquidated.ProtoReflect.Descriptor instead.
+func (*EventLiquidated) Descriptor() ([]byte, []int) {
+	return file_comi_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *EventLiquidated) GetVaultOwner() []byte {
+	if x != nil {
+		return x.VaultOwner
+	}
+	return nil
+}
+
+func (x *EventLiquidated) GetLiquidator() []byte {
+	if x != nil {
+		return x.Liquidator
+	}
+	return nil
+}
+
+func (x *EventLiquidated) GetRepaid() uint64 {
+	if x != nil {
+		return x.Repaid
+	}
+	return 0
+}
+
+func (x *EventLiquidated) GetSeizedCollateral() uint64 {
+	if x != nil {
+		return x.SeizedCollateral
+	}
+	return 0
+}
+
+func (x *EventLiquidated) GetRemainingDebt() uint64 {
+	if x != nil {
+		return x.RemainingDebt
+	}
+	return 0
+}
+
+func (x *EventLiquidated) GetRemainingCollateral() uint64 {
+	if x != nil {
+		return x.RemainingCollateral
+	}
+	return 0
+}
+
 var File_comi_proto protoreflect.FileDescriptor
 
 const file_comi_proto_rawDesc = "" +
@@ -637,7 +1628,82 @@ const file_comi_proto_rawDesc = "" +
 	"\fEventGateSet\x12\x19\n" +
 	"\basset_id\x18\x01 \x01(\x04R\aassetId\x12\x18\n" +
 	"\aaddress\x18\x02 \x01(\fR\aaddress\x12\x18\n" +
-	"\aallowed\x18\x03 \x01(\bR\aallowed*k\n" +
+	"\aallowed\x18\x03 \x01(\bR\aallowed\"\x8b\x02\n" +
+	"\n" +
+	"CUSDParams\x12\x1d\n" +
+	"\n" +
+	"supply_cap\x18\x01 \x01(\x04R\tsupplyCap\x12,\n" +
+	"\x12min_collateral_bps\x18\x02 \x01(\rR\x10minCollateralBps\x12'\n" +
+	"\x0fliquidation_bps\x18\x03 \x01(\rR\x0eliquidationBps\x126\n" +
+	"\x17liquidation_penalty_bps\x18\x04 \x01(\rR\x15liquidationPenaltyBps\x12\"\n" +
+	"\rmax_price_age\x18\x05 \x01(\x04R\vmaxPriceAge\x12+\n" +
+	"\x12max_price_move_bps\x18\x06 \x01(\rR\x0fmaxPriceMoveBps\";\n" +
+	"\vPriceRecord\x12\x14\n" +
+	"\x05price\x18\x01 \x01(\x04R\x05price\x12\x16\n" +
+	"\x06height\x18\x02 \x01(\x04R\x06height\"+\n" +
+	"\n" +
+	"CUSDSupply\x12\x1d\n" +
+	"\n" +
+	"total_debt\x18\x01 \x01(\x04R\ttotalDebt\"%\n" +
+	"\vCUSDAccount\x12\x16\n" +
+	"\x06amount\x18\x01 \x01(\x04R\x06amount\";\n" +
+	"\x05Vault\x12\x1e\n" +
+	"\n" +
+	"collateral\x18\x01 \x01(\x04R\n" +
+	"collateral\x12\x12\n" +
+	"\x04debt\x18\x02 \x01(\x04R\x04debt\"A\n" +
+	"\x14MessageSetCUSDParams\x12)\n" +
+	"\x06params\x18\x01 \x01(\v2\x11.types.CUSDParamsR\x06params\"(\n" +
+	"\x10MessagePostPrice\x12\x14\n" +
+	"\x05price\x18\x01 \x01(\x04R\x05price\"P\n" +
+	"\x13MessageVaultDeposit\x12!\n" +
+	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12\x16\n" +
+	"\x06amount\x18\x02 \x01(\x04R\x06amount\"Q\n" +
+	"\x14MessageVaultWithdraw\x12!\n" +
+	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12\x16\n" +
+	"\x06amount\x18\x02 \x01(\x04R\x06amount\"L\n" +
+	"\x0fMessageCUSDMint\x12!\n" +
+	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12\x16\n" +
+	"\x06amount\x18\x02 \x01(\x04R\x06amount\"L\n" +
+	"\x0fMessageCUSDBurn\x12!\n" +
+	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12\x16\n" +
+	"\x06amount\x18\x02 \x01(\x04R\x06amount\"o\n" +
+	"\x13MessageCUSDTransfer\x12!\n" +
+	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12\x1d\n" +
+	"\n" +
+	"to_address\x18\x02 \x01(\fR\ttoAddress\x12\x16\n" +
+	"\x06amount\x18\x03 \x01(\x04R\x06amount\"y\n" +
+	"\x10MessageLiquidate\x12!\n" +
+	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12\x1f\n" +
+	"\vvault_owner\x18\x02 \x01(\fR\n" +
+	"vaultOwner\x12!\n" +
+	"\frepay_amount\x18\x03 \x01(\x04R\vrepayAmount\"@\n" +
+	"\x10EventPricePosted\x12\x14\n" +
+	"\x05price\x18\x01 \x01(\x04R\x05price\x12\x16\n" +
+	"\x06height\x18\x02 \x01(\x04R\x06height\"\x8d\x01\n" +
+	"\x11EventVaultUpdated\x12\x16\n" +
+	"\x06action\x18\x01 \x01(\tR\x06action\x12\x14\n" +
+	"\x05owner\x18\x02 \x01(\fR\x05owner\x12\x16\n" +
+	"\x06amount\x18\x03 \x01(\x04R\x06amount\x12\x1e\n" +
+	"\n" +
+	"collateral\x18\x04 \x01(\x04R\n" +
+	"collateral\x12\x12\n" +
+	"\x04debt\x18\x05 \x01(\x04R\x04debt\"m\n" +
+	"\x11EventCUSDTransfer\x12!\n" +
+	"\ffrom_address\x18\x01 \x01(\fR\vfromAddress\x12\x1d\n" +
+	"\n" +
+	"to_address\x18\x02 \x01(\fR\ttoAddress\x12\x16\n" +
+	"\x06amount\x18\x03 \x01(\x04R\x06amount\"\xf1\x01\n" +
+	"\x0fEventLiquidated\x12\x1f\n" +
+	"\vvault_owner\x18\x01 \x01(\fR\n" +
+	"vaultOwner\x12\x1e\n" +
+	"\n" +
+	"liquidator\x18\x02 \x01(\fR\n" +
+	"liquidator\x12\x16\n" +
+	"\x06repaid\x18\x03 \x01(\x04R\x06repaid\x12+\n" +
+	"\x11seized_collateral\x18\x04 \x01(\x04R\x10seizedCollateral\x12%\n" +
+	"\x0eremaining_debt\x18\x05 \x01(\x04R\rremainingDebt\x121\n" +
+	"\x14remaining_collateral\x18\x06 \x01(\x04R\x13remainingCollateral*k\n" +
 	"\n" +
 	"AssetClass\x12\x1b\n" +
 	"\x17ASSET_CLASS_UNSPECIFIED\x10\x00\x12\x13\n" +
@@ -664,7 +1730,7 @@ func file_comi_proto_rawDescGZIP() []byte {
 }
 
 var file_comi_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_comi_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_comi_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_comi_proto_goTypes = []any{
 	(AssetClass)(0),              // 0: types.AssetClass
 	(GatePolicy)(0),              // 1: types.GatePolicy
@@ -675,6 +1741,23 @@ var file_comi_proto_goTypes = []any{
 	(*AdminConfig)(nil),          // 6: types.AdminConfig
 	(*EventAssetRegistered)(nil), // 7: types.EventAssetRegistered
 	(*EventGateSet)(nil),         // 8: types.EventGateSet
+	(*CUSDParams)(nil),           // 9: types.CUSDParams
+	(*PriceRecord)(nil),          // 10: types.PriceRecord
+	(*CUSDSupply)(nil),           // 11: types.CUSDSupply
+	(*CUSDAccount)(nil),          // 12: types.CUSDAccount
+	(*Vault)(nil),                // 13: types.Vault
+	(*MessageSetCUSDParams)(nil), // 14: types.MessageSetCUSDParams
+	(*MessagePostPrice)(nil),     // 15: types.MessagePostPrice
+	(*MessageVaultDeposit)(nil),  // 16: types.MessageVaultDeposit
+	(*MessageVaultWithdraw)(nil), // 17: types.MessageVaultWithdraw
+	(*MessageCUSDMint)(nil),      // 18: types.MessageCUSDMint
+	(*MessageCUSDBurn)(nil),      // 19: types.MessageCUSDBurn
+	(*MessageCUSDTransfer)(nil),  // 20: types.MessageCUSDTransfer
+	(*MessageLiquidate)(nil),     // 21: types.MessageLiquidate
+	(*EventPricePosted)(nil),     // 22: types.EventPricePosted
+	(*EventVaultUpdated)(nil),    // 23: types.EventVaultUpdated
+	(*EventCUSDTransfer)(nil),    // 24: types.EventCUSDTransfer
+	(*EventLiquidated)(nil),      // 25: types.EventLiquidated
 }
 var file_comi_proto_depIdxs = []int32{
 	0, // 0: types.Asset.class:type_name -> types.AssetClass
@@ -683,11 +1766,12 @@ var file_comi_proto_depIdxs = []int32{
 	1, // 3: types.MessageRegisterAsset.gate_policy:type_name -> types.GatePolicy
 	0, // 4: types.EventAssetRegistered.class:type_name -> types.AssetClass
 	1, // 5: types.EventAssetRegistered.gate_policy:type_name -> types.GatePolicy
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	9, // 6: types.MessageSetCUSDParams.params:type_name -> types.CUSDParams
+	7, // [7:7] is the sub-list for method output_type
+	7, // [7:7] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	7, // [7:7] is the sub-list for extension extendee
+	0, // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_comi_proto_init() }
@@ -701,7 +1785,7 @@ func file_comi_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_comi_proto_rawDesc), len(file_comi_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   7,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
