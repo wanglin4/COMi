@@ -3,9 +3,14 @@ package contract
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
+	"encoding/json"
 	"log"
 	"math"
 	"math/rand"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
@@ -17,20 +22,28 @@ import (
 
 // PluginConfig: the configuration of the contract
 var ContractConfig = &PluginConfig{
-	Name:                  "go_plugin_contract",
+	Name:                  "comi",
 	Id:                    1,
 	Version:               1,
-	SupportedTransactions: []string{"send"},
+	SupportedTransactions: []string{"send", "register_asset", "set_gate"},
+	// NOTE: SupportedTransactions and TransactionTypeUrls are aligned by index
 	TransactionTypeUrls: []string{
 		"type.googleapis.com/types.MessageSend",
+		"type.googleapis.com/types.MessageRegisterAsset",
+		"type.googleapis.com/types.MessageSetGate",
 	},
-	EventTypeUrls: nil,
+	EventTypeUrls: []string{
+		"type.googleapis.com/types.EventAssetRegistered",
+		"type.googleapis.com/types.EventGateSet",
+	},
+	CustomStatePrefixes: CustomStatePrefixes(),
 }
 
 // init sets FileDescriptorProtos after ensuring .pb.go files are initialized
 func init() {
 	// Explicitly initialize the proto files first to ensure File_*_proto are set
 	file_account_proto_init()
+	file_comi_proto_init()
 	file_event_proto_init()
 	file_plugin_proto_init()
 	file_tx_proto_init()
@@ -39,7 +52,7 @@ func init() {
 	// Include google/protobuf/any.proto first as it's a dependency of event.proto and tx.proto
 	for _, file := range []protoreflect.FileDescriptor{
 		anypb.File_google_protobuf_any_proto,
-		File_account_proto, File_event_proto, File_plugin_proto, File_tx_proto,
+		File_account_proto, File_comi_proto, File_event_proto, File_plugin_proto, File_tx_proto,
 	} {
 		fd, _ := proto.Marshal(protodesc.ToFileDescriptorProto(file))
 		fds = append(fds, fd)
@@ -53,11 +66,44 @@ type Contract struct {
 	FSMConfig *PluginFSMConfig // fsm configuration
 	plugin    *Plugin          // plugin connection
 	fsmId     uint64           // the id of the requesting fsm
+	st        stateIO          // optional state override (unit tests); nil = the FSM
 }
 
 // Genesis() implements logic to import a json file to create the state at height 0 and export the state at any height
+// GenesisFileName is the plugin-owned genesis file read from the plugin data directory.
+// Core re-marshals its own GenesisState before handing it to the plugin, so plugin specific fields
+// cannot ride in genesis.json; this file carries them instead.
+const GenesisFileName = "comi_genesis.json"
+
+// genesisFile is the schema of GenesisFileName
+type genesisFile struct {
+	Admin string `json:"admin"` // 20-byte hex address allowed to list assets and manage gates
+}
+
+// Genesis() initializes the admin record. It fails loudly when the file is missing or invalid, so a
+// node can never boot a chain that has no admin.
 func (c *Contract) Genesis(_ *PluginGenesisRequest) *PluginGenesisResponse {
-	return &PluginGenesisResponse{} // TODO map out original token holders
+	path := filepath.Join(c.Config.DataDirPath, GenesisFileName)
+	bz, e := os.ReadFile(path)
+	if e != nil {
+		return &PluginGenesisResponse{Error: ErrGenesis("cannot read " + path + ": " + e.Error())}
+	}
+	gf := new(genesisFile)
+	if e = json.Unmarshal(bz, gf); e != nil {
+		return &PluginGenesisResponse{Error: ErrGenesis("invalid json: " + e.Error())}
+	}
+	admin, e := hex.DecodeString(strings.TrimPrefix(strings.TrimSpace(gf.Admin), "0x"))
+	if e != nil || len(admin) != 20 || bytes.Equal(admin, make([]byte, 20)) {
+		return &PluginGenesisResponse{Error: ErrGenesis("admin must be a non-zero 20-byte hex address")}
+	}
+	cfgBz, err := Marshal(&AdminConfig{Admin: admin})
+	if err != nil {
+		return &PluginGenesisResponse{Error: err}
+	}
+	if err = c.io().Write([]*PluginSetOp{{Key: KeyForAdmin(), Value: cfgBz}}, nil); err != nil {
+		return &PluginGenesisResponse{Error: err}
+	}
+	return &PluginGenesisResponse{}
 }
 
 // BeginBlock() is code that is executed at the start of `applying` the block
@@ -67,21 +113,19 @@ func (c *Contract) BeginBlock(_ *PluginBeginRequest) *PluginBeginResponse {
 
 // CheckTx() is code that is executed to statelessly validate a transaction
 func (c *Contract) CheckTx(request *PluginCheckRequest) *PluginCheckResponse {
-	// validate fee
-	resp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
-		Keys: []*PluginKeyRead{
-			{QueryId: rand.Uint64(), Key: KeyForFeeParams()},
-		}})
-	if err == nil {
-		err = resp.Error
+	// guard against malformed requests
+	if request == nil || request.Tx == nil || request.Tx.Msg == nil {
+		return &PluginCheckResponse{Error: ErrInvalidMessageCast()}
 	}
+	// validate fee (the governance 'send fee' is the minimum fee for every transaction type)
+	vals, err := c.io().Read(KeyForFeeParams())
 	// handle error
 	if err != nil {
 		return &PluginCheckResponse{Error: err}
 	}
 	// convert bytes into fee parameters
 	minFees := new(FeeParams)
-	if err = Unmarshal(resp.Results[0].Entries[0].Value, minFees); err != nil {
+	if err = Unmarshal(vals[0], minFees); err != nil {
 		return &PluginCheckResponse{Error: err}
 	}
 	// check for the minimum fee
@@ -97,6 +141,10 @@ func (c *Contract) CheckTx(request *PluginCheckRequest) *PluginCheckResponse {
 	switch x := msg.(type) {
 	case *MessageSend:
 		return c.CheckMessageSend(x)
+	case *MessageRegisterAsset:
+		return c.CheckRegisterAsset(x)
+	case *MessageSetGate:
+		return c.CheckSetGate(x)
 	default:
 		return &PluginCheckResponse{Error: ErrInvalidMessageCast()}
 	}
@@ -104,6 +152,10 @@ func (c *Contract) CheckTx(request *PluginCheckRequest) *PluginCheckResponse {
 
 // DeliverTx() is code that is executed to apply a transaction
 func (c *Contract) DeliverTx(request *PluginDeliverRequest) *PluginDeliverResponse {
+	// guard against malformed requests
+	if request == nil || request.Tx == nil || request.Tx.Msg == nil {
+		return &PluginDeliverResponse{Error: ErrInvalidMessageCast()}
+	}
 	// get the message
 	msg, err := FromAny(request.Tx.Msg)
 	if err != nil {
@@ -113,6 +165,10 @@ func (c *Contract) DeliverTx(request *PluginDeliverRequest) *PluginDeliverRespon
 	switch x := msg.(type) {
 	case *MessageSend:
 		return c.DeliverMessageSend(x, request.Tx.Fee, request.Tx.Memo)
+	case *MessageRegisterAsset:
+		return c.DeliverRegisterAsset(x, request.Tx.Fee, request.Tx.Memo)
+	case *MessageSetGate:
+		return c.DeliverSetGate(x, request.Tx.Fee, request.Tx.Memo)
 	default:
 		return &PluginDeliverResponse{Error: ErrInvalidMessageCast()}
 	}

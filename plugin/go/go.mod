@@ -1,4 +1,4 @@
-module github.com/canopy-network/go-plugin
+module comi
 
 go 1.26
 

@@ -1,178 +1,66 @@
-# Send Transaction Flow Analysis
+# COMi plugin (Go)
 
-## Overview
+Gated asset engine on Canopy: RWA, bonds and (phase 2) synthetics behind one shared gate, with cUSD as the settlement stablecoin.
 
-This document analyzes the complete flow of a send transaction in the Canopy blockchain plugin template. The plugin implements a Unix socket-based communication system between smart contracts and the Canopy FSM (Finite State Machine).
+## Status
 
-## Architecture Components
+| Step | Item | State |
+|---|---|---|
+| 1 | Scaffold from the official Canopy Go plugin | done |
+| 2 | Gate + asset registry (`register_asset`, `set_gate`) | done, unit tested |
+| 3 | cUSD mint/burn against CNPY | not started |
+| 4 | Tier-one bond, NAV, `claim_yield` | not started |
+| 5 | Trading | not started |
+| 6 | Synthetics (phase 2) | rejected by `RegisterAsset` until enabled |
 
-### Key Files
-- `main.go`: Entry point starting the plugin with graceful shutdown
-- `contract/plugin.go`: Socket communication and plugin lifecycle management
-- `contract/contract.go`: Core contract logic and transaction processing
-- `contract/error.go`: Plugin-specific error definitions
-- `proto/*.proto`: Protocol buffer definitions for communication
+## Transactions
 
-## Complete Transaction Flow
+| `message_type` | Message | Signer | Effect |
+|---|---|---|---|
+| `send` | `MessageSend` | sender | native CNPY transfer (unchanged from upstream) |
+| `register_asset` | `MessageRegisterAsset` | admin | lists an asset, assigns the next id, indexes the symbol |
+| `set_gate` | `MessageSetGate` | admin | adds or revokes an allowlist entry for an asset |
 
-### 1. Plugin Initialization (main.go:11-18)
+Core does not deduct fees for plugin transactions, so every COMi transaction debits `tx.fee` from the admin and credits the fee pool. The governance `send_fee` is the minimum fee for all types.
 
-```
-main() → StartPlugin(DefaultConfig()) → Socket connection to FSM
-```
+## The gate
 
-The plugin connects to the Canopy FSM via Unix socket (`plugin.sock`):
-- Attempts connection every second until successful
-- Creates Plugin instance with configuration
-- Starts background listener for FSM messages
-- Performs handshake with FSM
+`gate.go` is the single check every asset-touching transaction must call: `RequireAllowed(state, assetId, addr)`. Phase 1 implements `ALLOWLIST` (admin managed) and `OPEN`. `ATTESTER` plugs in by implementing the `Gate` interface and flipping `attesterGateEnabled`; no caller changes.
 
-### 2. Socket Communication Setup (plugin.go:34-68)
+Rules enforced at registration: symbols are 2-12 chars of A-Z/0-9 starting with a letter; `CUSD` and `CNPY` are reserved; tier is 1 (collateral-eligible later) or 2 (listed only); tier-one assets cannot use an `OPEN` gate.
 
-```
-StartPlugin() → net.Dial("unix", sockPath) → ListenForInbound() → Handshake()
-```
+## State layout
 
-- **Socket Path**: `/tmp/plugin/plugin.sock` (default data directory)
-- **Protocol**: Length-prefixed protobuf messages
-- **Handshake**: Exchanges plugin configuration with FSM
-- **Concurrent Handling**: Each message processed in separate goroutine
+All keys are built with `JoinLenPrefix` and use custom prefixes outside core's reserved range (1-15), declared in `CustomStatePrefixes`.
 
-### 3. Transaction Reception (plugin.go:122-167)
+| Prefix | Key | Value |
+|---|---|---|
+| 100 | `100 / id` | `Asset` |
+| 101 | `101 / symbol` | asset id (big-endian uint64) |
+| 102 | `102 / id / address` | `0x01` (present = allowed) |
+| 103 | `103 / "admin"`, `103 / "count"` | `AdminConfig`, `RegistryMeta` |
 
-```
-FSM → Unix Socket → ListenForInbound() → Route by message type
-```
+## Genesis
 
-When FSM sends a transaction:
-1. Plugin receives length-prefixed protobuf message
-2. Creates new Contract instance with FSM context
-3. Routes message based on type (`FSMToPlugin_Check` or `FSMToPlugin_Deliver`)
-4. Processes request concurrently in goroutine
+Core re-marshals its own `GenesisState` before calling the plugin, so plugin fields cannot live in `genesis.json`. Place `comi_genesis.json` in the plugin data directory (`/tmp/plugin/` by default) before the first start:
 
-### 4. Transaction Validation - CheckTx (contract.go:38-72)
-
-```
-CheckTx() → Validate Fee → Parse Message → CheckMessageSend()
+```json
+{ "admin": "<40 hex chars>" }
 ```
 
-**Fee Validation**:
-- Reads fee parameters from state: `KeyForFeeParams()` (contract.go:42)
-- Verifies `tx.fee >= minFees.SendFee` (contract.go:57)
-- Returns error if fee too low: `ErrTxFeeBelowStateLimit()`
+Genesis fails loudly if the file is missing or the address is not a non-zero 20-byte hex string, so a chain can never start without an admin.
 
-**Message Parsing**:
-- Deserializes `tx.msg` from protobuf Any type (contract.go:61)
-- Type-switches to handle `MessageSend` (contract.go:66-68)
-
-**Send Message Validation** (contract.go:96-111):
-- **From Address**: Must be exactly 20 bytes (contract.go:98)
-- **To Address**: Must be exactly 20 bytes (contract.go:102) 
-- **Amount**: Must be greater than 0 (contract.go:106)
-- Returns authorized signers: `[][]byte{msg.FromAddress}`
-
-### 5. Transaction Execution - DeliverTx (contract.go:74-88)
+## Build and test
 
 ```
-DeliverTx() → Parse Message → DeliverMessageSend()
+make test    # unit tests, in-memory state
+make build   # produces ./go-plugin
 ```
 
-Routes to `DeliverMessageSend()` with fee parameter for state modifications.
+The binary keeps the name `go-plugin` because Canopy's `pluginctl.sh` and the Dockerfile start it by that name.
 
-### 6. Send Transaction Processing (contract.go:114-212)
+## Not yet done
 
-**State Reading** (contract.go:124-147):
-```
-StateRead() → FSM via Socket → Returns account balances and fee pool
-```
-
-Batch read operation for:
-- **Fee Pool**: `KeyForFeePool(chainId)` with prefix `[]byte{2}`
-- **From Account**: `KeyForAccount(fromAddress)` with prefix `[]byte{1}` 
-- **To Account**: `KeyForAccount(toAddress)` with prefix `[]byte{1}`
-
-**Balance Validation** (contract.go:149-164):
-- Calculates total deduction: `amount + fee`
-- Checks sender balance: `from.Amount >= amountToDeduct`
-- Returns `ErrInsufficientFunds()` if insufficient
-
-**Balance Updates** (contract.go:166-187):
-- **Self-transfer optimization**: Uses same account object if `fromKey == toKey`
-- **Sender**: `from.Amount -= (msg.Amount + fee)`
-- **Recipient**: `to.Amount += msg.Amount`  
-- **Fee Pool**: `feePool.Amount += fee`
-
-**State Writing**:
-```
-StateWrite() → FSM via Socket → Commits state changes
-```
-
-- **Fee Pool**: Write the updated fee pool.
-- **Accounts**: Write the updated sender and recipient records.
-- **Drained Accounts**: Delete nonce-zero native senders; retain records with committed nonce state and senders whose nonce will advance after `RLP.V2` delivery.
-
-### 7. State Key Structure
-
-**Account Storage**:
-- Prefix: `[]byte{1}`
-- Key: `JoinLenPrefix(accountPrefix, address)`
-- 20-byte addresses only
-
-**Fee Pool Storage**:
-- Prefix: `[]byte{2}` 
-- Key: `JoinLenPrefix(poolPrefix, formatUint64(chainId))`
-
-**Fee Parameters**:
-- Prefix: `[]byte{7}`
-- Key: `JoinLenPrefix(paramsPrefix, []byte("/f/"))`
-
-### 8. Socket Communication Protocol (plugin.go:239-292)
-
-**Message Format**:
-```
-[4-byte length prefix][protobuf message bytes]
-```
-
-**Request/Response Pattern**:
-- **Sync Requests**: Plugin waits for FSM response with 10-second timeout
-- **Async Handling**: FSM requests processed concurrently
-- **Request Correlation**: Unique request IDs track pending operations
-- **Error Handling**: Timeout cleanup and error propagation
-
-### 9. Error Handling
-
-**Validation Errors** (error.go):
-- `ErrInvalidAddress()` - Code 12: Non-20-byte addresses
-- `ErrInvalidAmount()` - Code 13: Zero amounts  
-- `ErrTxFeeBelowStateLimit()` - Code 14: Insufficient fees
-- `ErrInsufficientFunds()` - Code 9: Balance too low
-
-**System Errors**:
-- Socket communication failures
-- Protobuf serialization errors
-- State read/write timeouts
-- Plugin response correlation errors
-
-## Transaction Lifecycle Summary
-
-1. **Plugin Startup**: Connect to FSM via Unix socket
-2. **Transaction Receipt**: FSM sends transaction via socket
-3. **Validation Phase**: CheckTx validates fee, addresses, and amount
-4. **Execution Phase**: DeliverTx reads state, validates balance, updates accounts
-5. **State Persistence**: Write updated balances and fee pool to FSM
-6. **Response**: Return success/error to FSM via socket
-
-## Key Features
-
-- **Concurrent Processing**: Multiple transactions handled simultaneously
-- **State Management**: Efficient batch reads/writes with FSM
-- **Error Recovery**: Comprehensive error handling and timeouts
-- **Account Lifecycle**: Automatic cleanup of zero-balance accounts
-- **Fee Collection**: Transparent fee pooling for network sustainability
-
-## Performance Characteristics
-
-- **Socket Communication**: Low-latency Unix domain sockets
-- **Batch Operations**: Multiple state operations in single FSM call
-- **Memory Efficiency**: Length-prefixed messaging avoids buffering issues
-- **Concurrent Safety**: Thread-safe request correlation and state management
+- Admin rotation (`set_admin`) and multi-sig admin.
+- Read-only query RPC (`/v1/query/asset`, gate lookups) via `QueryState`.
+- No integration test against a running Canopy node yet.

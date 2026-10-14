@@ -1,10 +1,12 @@
-.PHONY: build test
+.PHONY: build test generate
 
 build:
 	go build -o go-plugin .
 
-# Run the integration tests (requires a running Canopy node with the go plugin).
-# This runs the transaction tests AND the custom RPC endpoints test
-# (/v1/query/faucets, /v1/query/rewards) — the latter needs the plugin's RPC server on port 50010.
+# unit tests run against an in-memory state store; no Canopy node needed
 test:
-	cd tutorial && go test -v -run 'TestPluginTransactions|TestPluginCustomRPCEndpoints' -timeout 600s
+	go test -race -count=1 ./contract
+
+# regenerate protobuf bindings (needs protoc, protoc-gen-go v1.36.6, protoc-go-inject-tag)
+generate:
+	cd proto && ./_generate.sh

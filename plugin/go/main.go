@@ -1,8 +1,8 @@
 package main
 
 import (
+	"comi/contract"
 	"context"
-	"github.com/canopy-network/go-plugin/contract"
 	"os"
 	"os/signal"
 	"syscall"

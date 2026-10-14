@@ -1,0 +1,82 @@
+syntax = "proto3";
+package types;
+option go_package = "comi/contract";
+
+// AssetClass is the product family an asset belongs to.
+// SYNTH is reserved for phase 2 and is rejected by RegisterAsset until enabled.
+enum AssetClass {
+  ASSET_CLASS_UNSPECIFIED = 0;
+  ASSET_CLASS_RWA = 1;
+  ASSET_CLASS_BOND = 2;
+  ASSET_CLASS_SYNTH = 3;
+}
+
+// GatePolicy decides who may hold, transfer and trade an asset.
+// ATTESTER (attester-signed approvals) is reserved for phase 2.
+enum GatePolicy {
+  GATE_POLICY_UNSPECIFIED = 0;
+  GATE_POLICY_ALLOWLIST = 1;
+  GATE_POLICY_ATTESTER = 2;
+  GATE_POLICY_OPEN = 3;
+}
+
+// Asset is a registry record.
+message Asset {
+  // id: sequential identifier assigned at registration (starts at 1)
+  uint64 id = 1;
+  // symbol: unique ticker, 2-12 chars of A-Z / 0-9, starting with a letter
+  string symbol = 2;
+  // class: RWA, BOND or SYNTH
+  AssetClass class = 3;
+  // issuer: the 20-byte address of the asset issuer
+  bytes issuer = 4;
+  // gate_policy: how holders are admitted
+  GatePolicy gate_policy = 5; // @gotags: json:"gatePolicy"
+  // tier: 1 = eligible as cUSD collateral (at a haircut, later phase), 2 = listed and tradable only
+  uint32 tier = 6;
+}
+
+// MessageRegisterAsset lists a new asset. Admin only (phase 1).
+message MessageRegisterAsset {
+  string symbol = 1;
+  AssetClass class = 2;
+  bytes issuer = 3;
+  GatePolicy gate_policy = 4; // @gotags: json:"gatePolicy"
+  uint32 tier = 5;
+}
+
+// MessageSetGate adds or revokes an address on an asset's allowlist. Admin only (phase 1).
+message MessageSetGate {
+  uint64 asset_id = 1; // @gotags: json:"assetId"
+  bytes address = 2;
+  bool allowed = 3;
+}
+
+// RegistryMeta is the singleton registry counter.
+message RegistryMeta {
+  // asset_count: number of assets registered so far (the last assigned asset id)
+  uint64 asset_count = 1; // @gotags: json:"assetCount"
+}
+
+// AdminConfig is the singleton governance record written at genesis.
+message AdminConfig {
+  // admin: the 20-byte address allowed to list assets and manage gates
+  bytes admin = 1;
+}
+
+// EventAssetRegistered is emitted when an asset is listed.
+message EventAssetRegistered {
+  uint64 asset_id = 1; // @gotags: json:"assetId"
+  string symbol = 2;
+  AssetClass class = 3;
+  bytes issuer = 4;
+  GatePolicy gate_policy = 5; // @gotags: json:"gatePolicy"
+  uint32 tier = 6;
+}
+
+// EventGateSet is emitted when an allowlist entry is added or revoked.
+message EventGateSet {
+  uint64 asset_id = 1; // @gotags: json:"assetId"
+  bytes address = 2;
+  bool allowed = 3;
+}
