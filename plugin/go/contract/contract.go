@@ -144,7 +144,20 @@ func (c *Contract) Genesis(_ *PluginGenesisRequest) *PluginGenesisResponse {
 }
 
 // BeginBlock() is code that is executed at the start of `applying` the block
-func (c *Contract) BeginBlock(_ *PluginBeginRequest) *PluginBeginResponse {
+func (c *Contract) BeginBlock(request *PluginBeginRequest) *PluginBeginResponse {
+	// core skips the plugin's Genesis() at height 0 (fsm.New is called with a nil plugin), so the admin
+	// record is created at the first block instead; it is never touched again once it exists
+	if request != nil && request.Height <= 1 {
+		vals, err := c.io().Read(KeyForAdmin())
+		if err != nil {
+			return &PluginBeginResponse{Error: err}
+		}
+		if len(vals) == 0 || len(vals[0]) == 0 {
+			if r := c.Genesis(&PluginGenesisRequest{}); r.Error != nil {
+				return &PluginBeginResponse{Error: r.Error}
+			}
+		}
+	}
 	return &PluginBeginResponse{}
 }
 
