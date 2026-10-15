@@ -24,7 +24,7 @@ interface WalletState {
 }
 
 const AUTHORITY_ADDRESS = process.env.NEXT_PUBLIC_AUTHORITY_ADDRESS?.toLowerCase() || "";
-const DERIVE_MSG = "Sign this message to derive your COMi prediction market key.";
+const DERIVE_MSG = "Sign this message to derive your COMi RWA platform key.";
 
 let syncTimer: ReturnType<typeof setInterval> | null = null;
 let syncBound = false;

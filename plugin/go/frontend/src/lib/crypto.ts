@@ -3,7 +3,7 @@ import { hkdf } from "@noble/hashes/hkdf.js";
 import { bls12_381 } from "@noble/curves/bls12-381.js";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 
-const DERIVATION_MSG = new TextEncoder().encode("COMi-Prediction-Market-Derivation-v1");
+const DERIVATION_MSG = new TextEncoder().encode("COMi-RWA-Market-Derivation-v1");
 
 export async function deriveBlsFromSignature(signatureHex: string): Promise<Uint8Array> {
   const sigBytes = hexToBytes(signatureHex.startsWith("0x") ? signatureHex.slice(2) : signatureHex);

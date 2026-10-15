@@ -1,7 +1,57 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
+// Temporary diagnostic: show any hydration errors
+function DiagnosticBanner() {
+  const [error, setError] = useState<string | null>(null);
+  const [txBuilderLoaded, setTxBuilderLoaded] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: ErrorEvent) => {
+      setError(`JS Error: ${e.message} at ${e.filename}:${e.lineno}`);
+      console.error("Caught error:", e.error);
+    };
+    window.addEventListener("error", handler);
+
+    // Test if txBuilder imports correctly
+    import("@/lib/txBuilder")
+      .then((m) => {
+        console.log("✓ txBuilder loaded:", Object.keys(m));
+        setTxBuilderLoaded(true);
+      })
+      .catch((e) => {
+        console.error("✗ txBuilder import failed:", e);
+        setError(`txBuilder import failed: ${e.message}`);
+      });
+
+    return () => window.removeEventListener("error", handler);
+  }, []);
+
+  if (!error) return null;
+
+  return (
+    <div style={{
+      position: "fixed",
+      top: "10px",
+      left: "10px",
+      right: "10px",
+      zIndex: 9999,
+      padding: "12px",
+      background: error ? "#dc2626" : "#16a34a",
+      color: "white",
+      borderRadius: "8px",
+      fontSize: "12px",
+      fontFamily: "monospace",
+      wordBreak: "break-word",
+    }}>
+      {error || "✓ txBuilder loaded successfully"}
+    </div>
+  );
+}
+
+
 import { useWalletStore } from "@/store/walletStore";
-import { useState } from "react";
 import { buildAndSignTransaction, getAccountNonce, submitTransaction } from "@/lib/txBuilder";
 
 const inputCls =
@@ -31,7 +81,9 @@ function validatePositive(num: string, name: string): string | null {
   return null;
 }
 
-export default function AdminPage() {
+export default function AdminPageWrapper() { return <div><DiagnosticBanner /><AdminPageInner /></div>; }
+
+function AdminPageInner() {
   const isAuthority = useWalletStore((s) => s.isAuthority);
   const ethAddress = useWalletStore((s) => s.ethAddress);
 
@@ -263,7 +315,7 @@ export default function AdminPage() {
   ];
 
   return (
-    <main className="mx-auto max-w-3xl p-4 pt-24 pb-24 space-y-6">
+    <main className="mx-auto max-w-3xl p-4 pt-28 pb-24 space-y-6">
       <div className="animate-fade-up opacity-0">
         <h1 className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-indigo-400 bg-clip-text text-transparent">
           Admin Console

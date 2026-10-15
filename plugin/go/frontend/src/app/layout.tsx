@@ -8,8 +8,8 @@ import { DriftBanner } from "@/components/DriftBanner";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "COMi Markets",
-  description: "Prediction markets on Canopy",
+  title: "COMi — Gated RWA Asset Engine",
+  description: "RWA, bonds and cUSD on Canopy: gated registry, vaults, order book, oracle.",
 };
 
 export default function RootLayout({
