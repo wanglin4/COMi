@@ -20,9 +20,14 @@ function validateRegister(symbol: string, issuer: string, tier: number, gatePoli
   return null;
 }
 
-function validateGate(assetId: string, address: string): string | null {
-  if (!assetId || isNaN(Number(assetId)) || Number(assetId) < 1) return "Asset ID must be a positive integer.";
-  if (!HEX40.test(address)) return "Address must be a 20-byte hex address (40 hex chars).";
+function validateHex40(addr: string, name: string): string | null {
+  if (!HEX40.test(addr)) return `${name} must be a 20-byte hex address (40 hex chars).`;
+  return null;
+}
+
+function validatePositive(num: string, name: string): string | null {
+  const n = Number(num);
+  if (!num || isNaN(n) || n < 0 || !Number.isInteger(n)) return `${name} must be a non-negative integer.`;
   return null;
 }
 
@@ -30,40 +35,43 @@ export default function AdminPage() {
   const isAuthority = useWalletStore((s) => s.isAuthority);
   const ethAddress = useWalletStore((s) => s.ethAddress);
 
-  const [symbol, setSymbol] = useState("");
-  const [assetClass, setAssetClass] = useState<1 | 2>(1);
-  const [issuer, setIssuer] = useState("");
-  const [gatePolicy, setGatePolicy] = useState<1 | 3>(1);
-  const [tier, setTier] = useState<1 | 2>(2);
-  const [regError, setRegError] = useState<string | null>(null);
-
-  const [gateAssetId, setGateAssetId] = useState("");
-  const [gateAddress, setGateAddress] = useState("");
-  const [gateAllowed, setGateAllowed] = useState(true);
-  const [gateError, setGateError] = useState<string | null>(null);
-
+  const [activeTab, setActiveTab] = useState<"registry" | "vaults" | "orders" | "oracle">("registry");
   const [payload, setPayload] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const buildRegister = () => {
-    const sym = symbol.toUpperCase();
-    const err = validateRegister(sym, issuer, tier, gatePolicy);
-    setRegError(err);
-    if (err) return;
+  // Registry state
+  const [symbol, setSymbol] = useState("");
+  const [assetClass, setAssetClass] = useState<1 | 2>(1);
+  const [issuer, setIssuer] = useState("");
+  const [gatePolicy, setGatePolicy] = useState<1 | 3>(1);
+  const [tier, setTier] = useState<1 | 2>(2);
+
+  // Vault state
+  const [vaultOp, setVaultOp] = useState<"deposit" | "withdraw" | "mint" | "burn" | "transfer" | "liquidate">("deposit");
+  const [vaultAmount, setVaultAmount] = useState("");
+  const [vaultTo, setVaultTo] = useState("");
+
+  // Order state
+  const [orderOp, setOrderOp] = useState<"place" | "cancel">("place");
+  const [orderAssetId, setOrderAssetId] = useState("");
+  const [orderSide, setOrderSide] = useState<1 | 2>(1);
+  const [orderPrice, setOrderPrice] = useState("");
+  const [orderAmount, setOrderAmount] = useState("");
+  const [orderId, setOrderId] = useState("");
+
+  // Oracle state
+  const [oracleOp, setOracleOp] = useState<"set" | "report">("report");
+  const [oraclePrice, setOraclePrice] = useState("");
+
+  const buildPayload = (messageType: string, msg: any, typeUrl: string) => {
     setPayload(
       JSON.stringify(
         {
-          message_type: "register_asset",
-          type_url: "type.googleapis.com/types.MessageRegisterAsset",
-          msg: {
-            symbol: sym,
-            class: assetClass,
-            issuer: "0x" + issuer.toLowerCase(),
-            gate_policy: gatePolicy,
-            tier: tier,
-          },
+          message_type: messageType,
+          type_url: typeUrl,
+          msg,
           signer: ethAddress,
         },
         null,
@@ -72,26 +80,120 @@ export default function AdminPage() {
     );
   };
 
+  const buildRegister = () => {
+    const sym = symbol.toUpperCase();
+    const err = validateRegister(sym, issuer, tier, gatePolicy);
+    if (err) { alert(err); return; }
+    buildPayload("register_asset", {
+      symbol: sym,
+      class: assetClass,
+      issuer: "0x" + issuer.toLowerCase(),
+      gate_policy: gatePolicy,
+      tier: tier,
+    }, "type.googleapis.com/types.MessageRegisterAsset");
+  };
+
   const buildGate = () => {
-    const err = validateGate(gateAssetId, gateAddress);
-    setGateError(err);
-    if (err) return;
-    setPayload(
-      JSON.stringify(
-        {
-          message_type: "set_gate",
-          type_url: "type.googleapis.com/types.MessageSetGate",
-          msg: {
-            asset_id: Number(gateAssetId),
-            address: "0x" + gateAddress.toLowerCase(),
-            allowed: gateAllowed,
-          },
-          signer: ethAddress,
-        },
-        null,
-        2
-      )
-    );
+    const assetId = prompt("Asset ID (0 for cUSD allowlist):");
+    if (!assetId) return;
+    const addr = prompt("Address (40 hex):");
+    if (!addr) return;
+    const err = validatePositive(assetId, "Asset ID") || validateHex40(addr, "Address");
+    if (err) { alert(err); return; }
+    const allow = confirm("Allow? (Cancel for Revoke)");
+    buildPayload("set_gate", {
+      asset_id: Number(assetId),
+      address: "0x" + addr.toLowerCase(),
+      allowed: allow,
+    }, "type.googleapis.com/types.MessageSetGate");
+  };
+
+  const buildVault = () => {
+    let msg: any = {};
+    let typeUrl = "";
+    let err: string | null = null;
+
+    switch (vaultOp) {
+      case "deposit":
+        err = validatePositive(vaultAmount, "Amount");
+        if (err) { alert(err); return; }
+        msg = { amount: Number(vaultAmount) };
+        typeUrl = "type.googleapis.com/types.MessageVaultDeposit";
+        break;
+      case "withdraw":
+        err = validatePositive(vaultAmount, "Amount");
+        if (err) { alert(err); return; }
+        msg = { amount: Number(vaultAmount) };
+        typeUrl = "type.googleapis.com/types.MessageVaultWithdraw";
+        break;
+      case "mint":
+        err = validatePositive(vaultAmount, "Amount");
+        if (err) { alert(err); return; }
+        msg = { amount: Number(vaultAmount) };
+        typeUrl = "type.googleapis.com/types.MessageCUSDMint";
+        break;
+      case "burn":
+        err = validatePositive(vaultAmount, "Amount");
+        if (err) { alert(err); return; }
+        msg = { amount: Number(vaultAmount) };
+        typeUrl = "type.googleapis.com/types.MessageCUSDBurn";
+        break;
+      case "transfer":
+        err = validatePositive(vaultAmount, "Amount") || validateHex40(vaultTo, "Recipient");
+        if (err) { alert(err); return; }
+        msg = { to_address: "0x" + vaultTo.toLowerCase(), amount: Number(vaultAmount) };
+        typeUrl = "type.googleapis.com/types.MessageCUSDTransfer";
+        break;
+      case "liquidate":
+        err = validatePositive(vaultAmount, "Repay Amount") || validateHex40(vaultTo, "Vault Owner");
+        if (err) { alert(err); return; }
+        msg = { vault_owner: "0x" + vaultTo.toLowerCase(), repay_amount: Number(vaultAmount) };
+        typeUrl = "type.googleapis.com/types.MessageLiquidate";
+        break;
+    }
+
+    buildPayload(vaultOp === "deposit" ? "vault_deposit" : 
+                 vaultOp === "withdraw" ? "vault_withdraw" :
+                 vaultOp === "mint" ? "cusd_mint" :
+                 vaultOp === "burn" ? "cusd_burn" :
+                 vaultOp === "transfer" ? "cusd_transfer" : "liquidate",
+      msg, typeUrl);
+  };
+
+  const buildOrder = () => {
+    if (orderOp === "place") {
+      const err = validatePositive(orderAssetId, "Asset ID") || 
+                  validatePositive(orderPrice, "Price") ||
+                  validatePositive(orderAmount, "Amount");
+      if (err) { alert(err); return; }
+      buildPayload("place_order", {
+        asset_id: Number(orderAssetId),
+        owner: ethAddress,
+        side: orderSide,
+        price: Number(orderPrice),
+        amount: Number(orderAmount),
+      }, "type.googleapis.com/types.MessagePlaceOrder");
+    } else {
+      const err = validatePositive(orderId, "Order ID");
+      if (err) { alert(err); return; }
+      buildPayload("cancel_order", {
+        owner: ethAddress,
+        order_id: Number(orderId),
+      }, "type.googleapis.com/types.MessageCancelOrder");
+    }
+  };
+
+  const buildOracle = () => {
+    if (oracleOp === "report") {
+      const err = validatePositive(oraclePrice, "Price");
+      if (err) { alert(err); return; }
+      buildPayload("report_price", {
+        reporter: ethAddress,
+        price: Number(oraclePrice),
+      }, "type.googleapis.com/types.MessageReportPrice");
+    } else {
+      alert("set_oracle requires admin privileges and reporter list (not yet implemented in UI)");
+    }
   };
 
   const handleSubmit = async () => {
@@ -125,7 +227,7 @@ export default function AdminPage() {
       const hash = await submitTransaction(signedTx, rpcUrl);
       setTxHash(hash);
     } catch (e: any) {
-      setSubmitError(e.message || "Submission failed");
+      setSubmitError(e.message || "Submission failed. Note: Browser signing requires protocol update to accept EIP-191 signatures.");
     } finally {
       setSubmitting(false);
     }
@@ -153,6 +255,13 @@ export default function AdminPage() {
     );
   }
 
+  const tabs = [
+    { id: "registry", label: "Registry & Gate" },
+    { id: "vaults", label: "cUSD Vaults" },
+    { id: "orders", label: "Order Book" },
+    { id: "oracle", label: "Oracle" },
+  ];
+
   return (
     <main className="mx-auto max-w-3xl p-4 pt-24 pb-24 space-y-6">
       <div className="animate-fade-up opacity-0">
@@ -160,53 +269,122 @@ export default function AdminPage() {
           Admin Console
         </h1>
         <p className="text-sm text-gray-400 mt-1">
-          Asset registry & gate management. Payloads match comi.proto; signing/submission lands with the tx-layer step.
+          Complete protocol surface. Submission requires node keystore or EIP-191 protocol update.
         </p>
       </div>
 
-      <section className="glass-card p-6 space-y-4 animate-fade-up opacity-0 delay-100">
-        <h2 className="font-semibold text-emerald-300">Register Asset</h2>
-        <input className={inputCls} placeholder="Symbol (A-Z, 2-12 chars)" value={symbol} onChange={(e) => setSymbol(e.target.value)} />
-        <div className="flex gap-3">
-          <select className={inputCls} value={assetClass} onChange={(e) => setAssetClass(Number(e.target.value) as 1 | 2)}>
-            <option value={1}>Class: RWA</option>
-            <option value={2}>Class: BOND</option>
-            <option value={3} disabled>Class: SYNTH (phase 2)</option>
-          </select>
-          <select className={inputCls} value={tier} onChange={(e) => setTier(Number(e.target.value) as 1 | 2)}>
-            <option value={1}>Tier 1 (collateral-eligible)</option>
-            <option value={2}>Tier 2 (listed only)</option>
-          </select>
-        </div>
-        <input className={inputCls} placeholder="Issuer address (40 hex)" value={issuer} onChange={(e) => setIssuer(e.target.value)} />
-        <select className={inputCls} value={gatePolicy} onChange={(e) => setGatePolicy(Number(e.target.value) as 1 | 3)}>
-          <option value={1}>Gate: ALLOWLIST</option>
-          <option value={3}>Gate: OPEN</option>
-          <option value={2} disabled>Gate: ATTESTER (phase 2)</option>
-        </select>
-        {regError && <p className="text-xs text-red-400">{regError}</p>}
-        <button onClick={buildRegister} className="w-full py-2 px-4 bg-gradient-to-r from-emerald-500 to-indigo-600 text-white font-semibold rounded-lg hover:opacity-90 transition">
-          Preview transaction
-        </button>
-      </section>
+      <div className="flex gap-2 overflow-x-auto animate-fade-up opacity-0 delay-100">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => { setActiveTab(tab.id as any); setPayload(null); }}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition whitespace-nowrap ${
+              activeTab === tab.id
+                ? "bg-gradient-to-r from-emerald-500 to-indigo-600 text-white"
+                : "bg-white/5 text-gray-400 hover:bg-white/10"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-      <section className="glass-card p-6 space-y-4 animate-fade-up opacity-0 delay-200">
-        <h2 className="font-semibold text-indigo-300">Set Gate</h2>
-        <input className={inputCls} placeholder="Asset ID" value={gateAssetId} onChange={(e) => setGateAssetId(e.target.value)} />
-        <input className={inputCls} placeholder="Address (40 hex)" value={gateAddress} onChange={(e) => setGateAddress(e.target.value)} />
-        <select className={inputCls} value={gateAllowed ? "allow" : "revoke"} onChange={(e) => setGateAllowed(e.target.value === "allow")}>
-          <option value="allow">Allow</option>
-          <option value="revoke">Revoke</option>
-        </select>
-        {gateError && <p className="text-xs text-red-400">{gateError}</p>}
-        <button onClick={buildGate} className="w-full py-2 px-4 bg-gradient-to-r from-emerald-500 to-indigo-600 text-white font-semibold rounded-lg hover:opacity-90 transition">
-          Preview transaction
-        </button>
-      </section>
+      {activeTab === "registry" && (
+        <section className="glass-card p-6 space-y-4 animate-fade-up opacity-0 delay-200">
+          <h2 className="font-semibold text-emerald-300">Register Asset</h2>
+          <input className={inputCls} placeholder="Symbol (A-Z, 2-12 chars)" value={symbol} onChange={(e) => setSymbol(e.target.value)} />
+          <div className="flex gap-3">
+            <select className={inputCls} value={assetClass} onChange={(e) => setAssetClass(Number(e.target.value) as 1 | 2)}>
+              <option value={1}>Class: RWA</option>
+              <option value={2}>Class: BOND</option>
+              <option value={3} disabled>Class: SYNTH (phase 2)</option>
+            </select>
+            <select className={inputCls} value={tier} onChange={(e) => setTier(Number(e.target.value) as 1 | 2)}>
+              <option value={1}>Tier 1</option>
+              <option value={2}>Tier 2</option>
+            </select>
+          </div>
+          <input className={inputCls} placeholder="Issuer address (40 hex)" value={issuer} onChange={(e) => setIssuer(e.target.value)} />
+          <select className={inputCls} value={gatePolicy} onChange={(e) => setGatePolicy(Number(e.target.value) as 1 | 3)}>
+            <option value={1}>Gate: ALLOWLIST</option>
+            <option value={3}>Gate: OPEN</option>
+            <option value={2} disabled>Gate: ATTESTER (phase 2)</option>
+          </select>
+          <button onClick={buildRegister} className="w-full py-2 px-4 bg-gradient-to-r from-emerald-500 to-indigo-600 text-white font-semibold rounded-lg hover:opacity-90 transition">
+            Preview Register Asset
+          </button>
+          <button onClick={buildGate} className="w-full py-2 px-4 border border-white/10 text-gray-300 rounded-lg hover:bg-white/5 transition">
+            Preview Set Gate
+          </button>
+        </section>
+      )}
+
+      {activeTab === "vaults" && (
+        <section className="glass-card p-6 space-y-4 animate-fade-up opacity-0 delay-200">
+          <h2 className="font-semibold text-indigo-300">cUSD Vault Operations</h2>
+          <select className={inputCls} value={vaultOp} onChange={(e) => setVaultOp(e.target.value as any)}>
+            <option value="deposit">Vault Deposit (lock uCNPY)</option>
+            <option value="withdraw">Vault Withdraw (unlock uCNPY)</option>
+            <option value="mint">cUSD Mint (borrow)</option>
+            <option value="burn">cUSD Burn (repay)</option>
+            <option value="transfer">cUSD Transfer</option>
+            <option value="liquidate">Liquidate Vault</option>
+          </select>
+          <input className={inputCls} placeholder="Amount" value={vaultAmount} onChange={(e) => setVaultAmount(e.target.value)} />
+          {(vaultOp === "transfer" || vaultOp === "liquidate") && (
+            <input className={inputCls} placeholder={vaultOp === "transfer" ? "Recipient (40 hex)" : "Vault Owner (40 hex)"} value={vaultTo} onChange={(e) => setVaultTo(e.target.value)} />
+          )}
+          <button onClick={buildVault} className="w-full py-2 px-4 bg-gradient-to-r from-emerald-500 to-indigo-600 text-white font-semibold rounded-lg hover:opacity-90 transition">
+            Preview {vaultOp}
+          </button>
+        </section>
+      )}
+
+      {activeTab === "orders" && (
+        <section className="glass-card p-6 space-y-4 animate-fade-up opacity-0 delay-200">
+          <h2 className="font-semibold text-indigo-300">Order Book</h2>
+          <select className={inputCls} value={orderOp} onChange={(e) => setOrderOp(e.target.value as any)}>
+            <option value="place">Place Order</option>
+            <option value="cancel">Cancel Order</option>
+          </select>
+          {orderOp === "place" ? (
+            <>
+              <input className={inputCls} placeholder="Asset ID" value={orderAssetId} onChange={(e) => setOrderAssetId(e.target.value)} />
+              <select className={inputCls} value={orderSide} onChange={(e) => setOrderSide(Number(e.target.value) as 1 | 2)}>
+                <option value={1}>Side: BUY</option>
+                <option value={2}>Side: SELL</option>
+              </select>
+              <input className={inputCls} placeholder="Price (micro-cUSD per unit)" value={orderPrice} onChange={(e) => setOrderPrice(e.target.value)} />
+              <input className={inputCls} placeholder="Amount (units)" value={orderAmount} onChange={(e) => setOrderAmount(e.target.value)} />
+            </>
+          ) : (
+            <input className={inputCls} placeholder="Order ID" value={orderId} onChange={(e) => setOrderId(e.target.value)} />
+          )}
+          <button onClick={buildOrder} className="w-full py-2 px-4 bg-gradient-to-r from-emerald-500 to-indigo-600 text-white font-semibold rounded-lg hover:opacity-90 transition">
+            Preview {orderOp === "place" ? "Place Order" : "Cancel Order"}
+          </button>
+        </section>
+      )}
+
+      {activeTab === "oracle" && (
+        <section className="glass-card p-6 space-y-4 animate-fade-up opacity-0 delay-200">
+          <h2 className="font-semibold text-indigo-300">Oracle</h2>
+          <select className={inputCls} value={oracleOp} onChange={(e) => setOracleOp(e.target.value as any)}>
+            <option value="report">Report Price (reporter only)</option>
+            <option value="set" disabled>Set Oracle (admin only, not yet implemented)</option>
+          </select>
+          {oracleOp === "report" && (
+            <input className={inputCls} placeholder="Price (micro-cUSD per CNPY)" value={oraclePrice} onChange={(e) => setOraclePrice(e.target.value)} />
+          )}
+          <button onClick={buildOracle} className="w-full py-2 px-4 bg-gradient-to-r from-emerald-500 to-indigo-600 text-white font-semibold rounded-lg hover:opacity-90 transition">
+            Preview Report Price
+          </button>
+        </section>
+      )}
 
       {payload && (
-        <div className="space-y-2">
-          <pre className="glass-card p-4 text-xs overflow-x-auto text-gray-300 animate-fade-up opacity-0">{payload}</pre>
+        <div className="space-y-2 animate-fade-up opacity-0">
+          <pre className="glass-card p-4 text-xs overflow-x-auto text-gray-300">{payload}</pre>
           <button
             onClick={handleSubmit}
             disabled={submitting}
