@@ -202,3 +202,11 @@ func ErrCorruptState() *PluginError {
 func ErrReservedAddress() *PluginError {
 	return NewError(46, DefaultModule, "address is reserved by the protocol")
 }
+
+func ErrNotReporter() *PluginError {
+	return NewError(47, DefaultModule, "signer is not a configured price reporter")
+}
+
+func ErrOracleManaged() *PluginError {
+	return NewError(48, DefaultModule, "the price is set by reporters; the admin cannot post it directly")
+}

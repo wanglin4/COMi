@@ -256,6 +256,13 @@ func (c *Contract) CheckPostPrice(m *MessagePostPrice) *PluginCheckResponse {
 	if m.Price == 0 || m.Price > maxPrice {
 		return &PluginCheckResponse{Error: ErrInvalidPrice()}
 	}
+	vals, err := c.io().Read(KeyForOracleConfig())
+	if err != nil {
+		return &PluginCheckResponse{Error: err}
+	}
+	if oracleManaged(vals[0]) {
+		return &PluginCheckResponse{Error: ErrOracleManaged()}
+	}
 	return c.adminSigner()
 }
 
@@ -310,13 +317,17 @@ func (c *Contract) DeliverPostPrice(m *MessagePostPrice, fee uint64, memo string
 	if err != nil {
 		return &PluginDeliverResponse{Error: err}
 	}
-	vals, err := s.Read(KeyForCUSDParams(), KeyForPrice(), KeyForAccount(admin), KeyForFeePool(c.Config.ChainId))
+	vals, err := s.Read(KeyForCUSDParams(), KeyForPrice(), KeyForAccount(admin), KeyForFeePool(c.Config.ChainId),
+		KeyForOracleConfig())
 	if err != nil {
 		return &PluginDeliverResponse{Error: err}
 	}
 	params, err := decodeParams(vals[0])
 	if err != nil {
 		return &PluginDeliverResponse{Error: err}
+	}
+	if oracleManaged(vals[4]) {
+		return &PluginDeliverResponse{Error: ErrOracleManaged()}
 	}
 	if len(vals[1]) > 0 {
 		old := new(PriceRecord)

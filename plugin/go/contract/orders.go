@@ -451,6 +451,22 @@ func (c *Contract) DeliverTransferUnits(m *MessageTransferUnits, fee uint64, mem
 
 // ---- order book ----
 
+// tradeAcc sums the fills of one order so the oracle records them once
+type tradeAcc struct {
+	units, notional, last uint64
+	overflow              bool
+}
+
+func (a *tradeAcc) add(price, units, value uint64) {
+	a.last = price
+	if a.units > math.MaxUint64-units || a.notional > math.MaxUint64-value {
+		a.overflow = true
+		return
+	}
+	a.units += units
+	a.notional += value
+}
+
 // crosses() reports whether the taker's limit price accepts the maker's price
 func crosses(taker, maker *Order) bool {
 	if taker.Side == Side_SIDE_BUY {
@@ -461,7 +477,7 @@ func crosses(taker, maker *Order) bool {
 
 // matchOrder() fills the taker against the opposite side of the book. It returns the trade events and
 // whether the unfilled remainder may rest (false = the match cap was hit and the book may still cross).
-func (c *Contract) matchOrder(l *ledger, t *Order) ([]*Event, bool, *PluginError) {
+func (c *Contract) matchOrder(l *ledger, t *Order, acc *tradeAcc) ([]*Event, bool, *PluginError) {
 	opp := Side_SIDE_SELL
 	if t.Side == Side_SIDE_SELL {
 		opp = Side_SIDE_BUY
@@ -547,6 +563,7 @@ func (c *Contract) matchOrder(l *ledger, t *Order) ([]*Event, bool, *PluginError
 				return nil, false, err
 			}
 		}
+		acc.add(maker.Price, fill, value)
 		maker.Remaining -= fill
 		t.Remaining -= fill
 		if maker.Remaining == 0 {
@@ -565,7 +582,7 @@ func (c *Contract) matchOrder(l *ledger, t *Order) ([]*Event, bool, *PluginError
 }
 
 // DeliverPlaceOrder() escrows the order's funds, matches it, then rests or refunds the remainder
-func (c *Contract) DeliverPlaceOrder(m *MessagePlaceOrder, fee uint64, memo string) *PluginDeliverResponse {
+func (c *Contract) DeliverPlaceOrder(m *MessagePlaceOrder, fee uint64, memo string, height uint64) *PluginDeliverResponse {
 	if err := ValidatePlaceOrder(m); err != nil {
 		return fail(err)
 	}
@@ -594,9 +611,15 @@ func (c *Contract) DeliverPlaceOrder(m *MessagePlaceOrder, fee uint64, memo stri
 	if err != nil {
 		return fail(err)
 	}
-	trades, canRest, err := c.matchOrder(l, t)
+	acc := new(tradeAcc)
+	trades, canRest, err := c.matchOrder(l, t, acc)
 	if err != nil {
 		return fail(err)
+	}
+	if acc.units > 0 && !acc.overflow {
+		if err = recordTrades(l, m.AssetId, acc, height); err != nil {
+			return fail(err)
+		}
 	}
 	filled := m.Amount - t.Remaining
 	resting := false

@@ -18,6 +18,8 @@ var (
 	orderPrefix      = []byte{107} // order records:            107 / order id
 	bookPrefix       = []byte{108} // price-time book index:    108 / asset id / side / price key / order id
 	ownerOrderPrefix = []byte{109} // orders by owner index:    109 / owner / order id
+	reportPrefix      = []byte{110} // reporter price reports:   110 / reporter
+	assetOraclePrefix = []byte{111} // asset trade history:      111 / asset id
 )
 
 // CollateralPoolID is the core pool that holds all vault collateral (uCNPY). It sits above core's
@@ -31,7 +33,7 @@ const CUSDGateID uint64 = 0
 // CustomStatePrefixes returns the prefixes declared to core at handshake
 func CustomStatePrefixes() [][]byte {
 	return [][]byte{assetPrefix, symbolPrefix, gatePrefix, metaPrefix, cusdPrefix, vaultPrefix,
-		holdingPrefix, orderPrefix, bookPrefix, ownerOrderPrefix}
+		holdingPrefix, orderPrefix, bookPrefix, ownerOrderPrefix, reportPrefix, assetOraclePrefix}
 }
 
 // KeyForAsset() returns the state key of an asset record
@@ -101,6 +103,17 @@ func KeyForBook(assetId uint64, side Side, price, orderId uint64) []byte {
 // KeyForOwnerOrder() returns the key of the owner -> order index entry
 func KeyForOwnerOrder(owner []byte, orderId uint64) []byte {
 	return JoinLenPrefix(ownerOrderPrefix, owner, formatUint64(orderId))
+}
+
+// KeyForOracleConfig() returns the state key of the OracleConfig singleton
+func KeyForOracleConfig() []byte { return JoinLenPrefix(metaPrefix, []byte("oracle")) }
+
+// KeyForReport() returns the state key of a reporter's latest price report
+func KeyForReport(reporter []byte) []byte { return JoinLenPrefix(reportPrefix, reporter) }
+
+// KeyForAssetOracle() returns the state key of an asset's trade history
+func KeyForAssetOracle(assetId uint64) []byte {
+	return JoinLenPrefix(assetOraclePrefix, formatUint64(assetId))
 }
 
 // KeyForPool() returns the state key of a core pool

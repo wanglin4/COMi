@@ -36,7 +36,11 @@ const (
 
 // ordEnv extends the cUSD environment with asset 1 (issuer addr(9)), gated users addr(10..12), each
 // holding 300 cUSD. Units are issued per test.
-type ordEnv struct{ *cusdEnv }
+// h is the block height used for orders placed through the helpers
+type ordEnv struct {
+	*cusdEnv
+	h uint64
+}
 
 func (e *ordEnv) ok(r *PluginDeliverResponse) {
 	e.t.Helper()
@@ -51,7 +55,7 @@ func (e *ordEnv) fails(r *PluginDeliverResponse, want *PluginError) {
 }
 
 func newOrders(t *testing.T) *ordEnv {
-	e := &ordEnv{newCUSD(t)}
+	e := &ordEnv{cusdEnv: newCUSD(t), h: startHeight}
 	e.st.m[string(KeyForAccount(addr(9)))] = mustMarshal(t, &Account{Amount: userCNPY})
 	e.total += userCNPY
 	e.cusdEnv.ok(e.c.DeliverRegisterAsset(bond("BOND1"), testFee, ""))
@@ -69,7 +73,7 @@ func (e *ordEnv) issue(u byte, amt uint64) {
 }
 
 func (e *ordEnv) place(u byte, side Side, price, amt uint64) *PluginDeliverResponse {
-	return e.c.DeliverPlaceOrder(&MessagePlaceOrder{AssetId: 1, Owner: addr(u), Side: side, Price: price, Amount: amt}, testFee, "")
+	return e.c.DeliverPlaceOrder(&MessagePlaceOrder{AssetId: 1, Owner: addr(u), Side: side, Price: price, Amount: amt}, testFee, "", e.h)
 }
 
 func (e *ordEnv) cancel(u byte, id uint64) *PluginDeliverResponse {
@@ -356,8 +360,8 @@ func TestOrderRejections(t *testing.T) {
 	e.fails(e.place(10, Side_SIDE_SELL, 0, 1), ErrInvalidAmount())
 	e.fails(e.place(10, Side_SIDE_SELL, 1<<62, 8), ErrInvalidAmount())
 	e.fails(e.place(10, Side_SIDE_UNSPECIFIED, p10, 1), ErrInvalidSide())
-	e.fails(e.c.DeliverPlaceOrder(&MessagePlaceOrder{AssetId: 0, Owner: addr(10), Side: Side_SIDE_SELL, Price: p10, Amount: 1}, testFee, ""), ErrAssetNotFound())
-	e.fails(e.c.DeliverPlaceOrder(&MessagePlaceOrder{AssetId: 1, Owner: escrowAddr, Side: Side_SIDE_SELL, Price: p10, Amount: 1}, testFee, ""), ErrReservedAddress())
+	e.fails(e.c.DeliverPlaceOrder(&MessagePlaceOrder{AssetId: 0, Owner: addr(10), Side: Side_SIDE_SELL, Price: p10, Amount: 1}, testFee, "", e.h), ErrAssetNotFound())
+	e.fails(e.c.DeliverPlaceOrder(&MessagePlaceOrder{AssetId: 1, Owner: escrowAddr, Side: Side_SIDE_SELL, Price: p10, Amount: 1}, testFee, "", e.h), ErrReservedAddress())
 	if e.st.writes != w {
 		t.Fatal("rejected orders must not write state or charge fees")
 	}

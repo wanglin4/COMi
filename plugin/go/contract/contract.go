@@ -27,7 +27,7 @@ var ContractConfig = &PluginConfig{
 	Version: 1,
 	SupportedTransactions: []string{"send", "register_asset", "set_gate", "set_cusd_params", "post_price",
 		"vault_deposit", "vault_withdraw", "cusd_mint", "cusd_burn", "cusd_transfer", "liquidate",
-		"issue_units", "transfer_units", "place_order", "cancel_order"},
+		"issue_units", "transfer_units", "place_order", "cancel_order", "set_oracle", "report_price"},
 	// NOTE: SupportedTransactions and TransactionTypeUrls are aligned by index
 	TransactionTypeUrls: []string{
 		"type.googleapis.com/types.MessageSend",
@@ -45,6 +45,8 @@ var ContractConfig = &PluginConfig{
 		"type.googleapis.com/types.MessageTransferUnits",
 		"type.googleapis.com/types.MessagePlaceOrder",
 		"type.googleapis.com/types.MessageCancelOrder",
+		"type.googleapis.com/types.MessageSetOracle",
+		"type.googleapis.com/types.MessageReportPrice",
 	},
 	EventTypeUrls: []string{
 		"type.googleapis.com/types.EventAssetRegistered",
@@ -58,6 +60,8 @@ var ContractConfig = &PluginConfig{
 		"type.googleapis.com/types.EventOrderPlaced",
 		"type.googleapis.com/types.EventTrade",
 		"type.googleapis.com/types.EventOrderCancelled",
+		"type.googleapis.com/types.EventOracleSet",
+		"type.googleapis.com/types.EventPriceReported",
 	},
 	CustomStatePrefixes: CustomStatePrefixes(),
 }
@@ -68,6 +72,7 @@ func init() {
 	file_account_proto_init()
 	file_comi_proto_init()
 	file_event_proto_init()
+	file_oracle_proto_init()
 	file_orders_proto_init()
 	file_plugin_proto_init()
 	file_tx_proto_init()
@@ -76,7 +81,7 @@ func init() {
 	// Include google/protobuf/any.proto first as it's a dependency of event.proto and tx.proto
 	for _, file := range []protoreflect.FileDescriptor{
 		anypb.File_google_protobuf_any_proto,
-		File_account_proto, File_comi_proto, File_event_proto, File_orders_proto, File_plugin_proto, File_tx_proto,
+		File_account_proto, File_comi_proto, File_event_proto, File_oracle_proto, File_orders_proto, File_plugin_proto, File_tx_proto,
 	} {
 		fd, _ := proto.Marshal(protodesc.ToFileDescriptorProto(file))
 		fds = append(fds, fd)
@@ -193,6 +198,10 @@ func (c *Contract) CheckTx(request *PluginCheckRequest) *PluginCheckResponse {
 		return c.CheckPlaceOrder(x)
 	case *MessageCancelOrder:
 		return c.CheckCancelOrder(x)
+	case *MessageSetOracle:
+		return c.CheckSetOracle(x)
+	case *MessageReportPrice:
+		return c.CheckReportPrice(x)
 	default:
 		return &PluginCheckResponse{Error: ErrInvalidMessageCast()}
 	}
@@ -238,9 +247,13 @@ func (c *Contract) DeliverTx(request *PluginDeliverRequest) *PluginDeliverRespon
 	case *MessageTransferUnits:
 		return c.DeliverTransferUnits(x, request.Tx.Fee, request.Tx.Memo)
 	case *MessagePlaceOrder:
-		return c.DeliverPlaceOrder(x, request.Tx.Fee, request.Tx.Memo)
+		return c.DeliverPlaceOrder(x, request.Tx.Fee, request.Tx.Memo, request.Height)
 	case *MessageCancelOrder:
 		return c.DeliverCancelOrder(x, request.Tx.Fee, request.Tx.Memo)
+	case *MessageSetOracle:
+		return c.DeliverSetOracle(x, request.Tx.Fee, request.Tx.Memo)
+	case *MessageReportPrice:
+		return c.DeliverReportPrice(x, request.Tx.Fee, request.Tx.Memo, request.Height)
 	default:
 		return &PluginDeliverResponse{Error: ErrInvalidMessageCast()}
 	}

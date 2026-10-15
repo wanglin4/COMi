@@ -1,0 +1,79 @@
+syntax = "proto3";
+package types;
+option go_package = "comi/contract";
+
+// OracleParams tune the per-asset trade-price oracle (a volume-weighted average over a sliding window
+// of fixed-size block buckets).
+message OracleParams {
+  // bucket_blocks: blocks per bucket (>= 1)
+  uint64 bucket_blocks = 1; // @gotags: json:"bucketBlocks"
+  // window_buckets: how many recent buckets make up the window (1..12)
+  uint32 window_buckets = 2; // @gotags: json:"windowBuckets"
+  // min_buckets: distinct buckets with trades required before an asset price is reported (1..window)
+  uint32 min_buckets = 3; // @gotags: json:"minBuckets"
+  // min_notional: total traded value (micro-cUSD) required in the window before a price is reported
+  uint64 min_notional = 4; // @gotags: json:"minNotional"
+}
+
+// OracleConfig is the admin-set oracle configuration. When reporters is non-empty, the CNPY price is
+// the median of the reporters' fresh reports and the admin can no longer post it directly.
+message OracleConfig {
+  // reporters: up to 9 distinct 20-byte addresses
+  repeated bytes reporters = 1;
+  OracleParams params = 2;
+}
+
+// Report is one reporter's latest CNPY price report.
+message Report {
+  // price: micro-cUSD per 1 CNPY
+  uint64 price = 1;
+  uint64 height = 2;
+}
+
+// Bucket accumulates trades that happened in one block bucket.
+message Bucket {
+  // index: height / bucket_blocks
+  uint64 index = 1;
+  // notional: total traded value in micro-cUSD
+  uint64 notional = 2;
+  // units: total units traded
+  uint64 units = 3;
+}
+
+// AssetOracle is the per-asset trade history the price is computed from.
+message AssetOracle {
+  repeated Bucket buckets = 1;
+  // last_price: price of the most recent trade (informational; never used as the oracle price)
+  uint64 last_price = 2; // @gotags: json:"lastPrice"
+  uint64 last_height = 3; // @gotags: json:"lastHeight"
+}
+
+// MessageSetOracle replaces the oracle configuration. Admin only.
+message MessageSetOracle {
+  OracleConfig config = 1;
+}
+
+// MessageReportPrice submits a reporter's CNPY price. Signed by the reporter.
+message MessageReportPrice {
+  bytes reporter = 1;
+  // price: micro-cUSD per 1 CNPY
+  uint64 price = 2;
+}
+
+// EventOracleSet is emitted when the configuration changes.
+message EventOracleSet {
+  uint32 reporters = 1;
+}
+
+// EventPriceReported is emitted for every report. updated is true when it produced a new CNPY price.
+message EventPriceReported {
+  bytes reporter = 1;
+  uint64 price = 2;
+  // fresh: number of fresh reports counted
+  uint32 fresh = 3;
+  // quorum: reports needed
+  uint32 quorum = 4;
+  // aggregate: the CNPY price after this report (0 if there is no price yet)
+  uint64 aggregate = 5;
+  bool updated = 6;
+}
