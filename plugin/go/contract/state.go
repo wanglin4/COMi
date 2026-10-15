@@ -1,5 +1,7 @@
 package contract
 
+import "math"
+
 /* This file contains COMi's state layout (keys) and a small read/write abstraction over the FSM,
    so the business logic can be unit tested against an in-memory store. */
 
@@ -12,6 +14,10 @@ var (
 	metaPrefix   = []byte{103} // singleton records:        103 / "admin" | "count" | "cusd_params" | "price" | "cusd_supply"
 	cusdPrefix   = []byte{104} // cUSD balances:            104 / address
 	vaultPrefix  = []byte{105} // collateral vaults:        105 / address
+	holdingPrefix    = []byte{106} // asset unit balances:      106 / asset id / address
+	orderPrefix      = []byte{107} // order records:            107 / order id
+	bookPrefix       = []byte{108} // price-time book index:    108 / asset id / side / price key / order id
+	ownerOrderPrefix = []byte{109} // orders by owner index:    109 / owner / order id
 )
 
 // CollateralPoolID is the core pool that holds all vault collateral (uCNPY). It sits above core's
@@ -24,7 +30,8 @@ const CUSDGateID uint64 = 0
 
 // CustomStatePrefixes returns the prefixes declared to core at handshake
 func CustomStatePrefixes() [][]byte {
-	return [][]byte{assetPrefix, symbolPrefix, gatePrefix, metaPrefix, cusdPrefix, vaultPrefix}
+	return [][]byte{assetPrefix, symbolPrefix, gatePrefix, metaPrefix, cusdPrefix, vaultPrefix,
+		holdingPrefix, orderPrefix, bookPrefix, ownerOrderPrefix}
 }
 
 // KeyForAsset() returns the state key of an asset record
@@ -58,6 +65,43 @@ func KeyForCUSD(addr []byte) []byte { return JoinLenPrefix(cusdPrefix, addr) }
 
 // KeyForVault() returns the state key of an address's vault
 func KeyForVault(addr []byte) []byte { return JoinLenPrefix(vaultPrefix, addr) }
+
+// KeyForHolding() returns the state key of an address's balance of an asset
+func KeyForHolding(assetId uint64, addr []byte) []byte {
+	return JoinLenPrefix(holdingPrefix, formatUint64(assetId), addr)
+}
+
+// KeyForUnitSupply() returns the state key of an asset's UnitSupply record
+func KeyForUnitSupply(assetId uint64) []byte {
+	return JoinLenPrefix(metaPrefix, []byte("units"), formatUint64(assetId))
+}
+
+// KeyForOrderMeta() returns the state key of the OrderMeta singleton
+func KeyForOrderMeta() []byte { return JoinLenPrefix(metaPrefix, []byte("orders")) }
+
+// KeyForOrder() returns the state key of an order record
+func KeyForOrder(id uint64) []byte { return JoinLenPrefix(orderPrefix, formatUint64(id)) }
+
+// bookSidePrefix() is the key prefix shared by every book entry of one asset and side
+func bookSidePrefix(assetId uint64, side Side) []byte {
+	return JoinLenPrefix(bookPrefix, formatUint64(assetId), []byte{byte(side)})
+}
+
+// KeyForBook() returns the book index key of an order. Iterating a side prefix in ascending key order
+// yields the BEST order first: asks sort by ascending price, bids store the complemented price so the
+// highest bid sorts first, and within one price the lower order id (earlier) comes first.
+func KeyForBook(assetId uint64, side Side, price, orderId uint64) []byte {
+	p := price
+	if side == Side_SIDE_BUY {
+		p = math.MaxUint64 - price
+	}
+	return JoinLenPrefix(bookPrefix, formatUint64(assetId), []byte{byte(side)}, formatUint64(p), formatUint64(orderId))
+}
+
+// KeyForOwnerOrder() returns the key of the owner -> order index entry
+func KeyForOwnerOrder(owner []byte, orderId uint64) []byte {
+	return JoinLenPrefix(ownerOrderPrefix, owner, formatUint64(orderId))
+}
 
 // KeyForPool() returns the state key of a core pool
 func KeyForPool(id uint64) []byte { return JoinLenPrefix(poolPrefix, formatUint64(id)) }
@@ -118,6 +162,8 @@ type stateIO interface {
 	Read(keys ...[]byte) ([][]byte, *PluginError)
 	// Write applies sets and deletes atomically (one StateWrite round trip)
 	Write(sets []*PluginSetOp, deletes []*PluginDeleteOp) *PluginError
+	// Range returns up to limit entries whose key starts with prefix, in ascending key order
+	Range(prefix []byte, limit uint64) ([]*PluginStateEntry, *PluginError)
 }
 
 // io() returns the state interface for this contract context
@@ -165,4 +211,23 @@ func (f *fsmState) Write(sets []*PluginSetOp, deletes []*PluginDeleteOp) *Plugin
 		return err
 	}
 	return resp.Error
+}
+
+// Range() implements stateIO
+func (f *fsmState) Range(prefix []byte, limit uint64) ([]*PluginStateEntry, *PluginError) {
+	resp, err := f.c.plugin.StateRead(f.c, &PluginStateReadRequest{
+		Ranges: []*PluginRangeRead{{QueryId: 1, Prefix: prefix, Limit: limit}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+	for _, r := range resp.Results {
+		if r.QueryId == 1 {
+			return r.Entries, nil
+		}
+	}
+	return nil, nil
 }

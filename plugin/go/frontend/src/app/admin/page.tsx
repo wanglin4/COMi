@@ -2,6 +2,7 @@
 
 import { useWalletStore } from "@/store/walletStore";
 import { useState } from "react";
+import { buildAndSignTransaction, getAccountNonce, submitTransaction } from "@/lib/txBuilder";
 
 const inputCls =
   "w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm focus:outline-none focus:border-emerald-500/50";
@@ -45,7 +46,54 @@ export default function AdminPage() {
   const [payload, setPayload] = useState<string | null>(null);
 
   if (!ethAddress) {
-    return (
+  
+  const [submitting, setSubmitting] = useState(false);
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const submitTransaction = async () => {
+    if (!payload || !ethAddress) return;
+    
+    setSubmitting(true);
+    setSubmitError(null);
+    setTxHash(null);
+    
+    try {
+      // Parse the payload
+      const txData = JSON.parse(payload);
+      
+      // Get nonce from chain
+      const rpcUrl = process.env.NEXT_PUBLIC_NODE_RPC_URL || "http://localhost:8545";
+      const nonce = await getAccountNonce(ethAddress, rpcUrl);
+      
+      // Build and sign transaction
+      const signedTx = await buildAndSignTransaction(
+        {
+          messageType: txData.message_type,
+          msg: txData.msg,
+          typeUrl: txData.type_url,
+          signer: ethAddress,
+          nonce: nonce + 1,
+          fee: 10000,
+          networkId: 1,
+          chainId: 1,
+          createdHeight: 0,
+        },
+        ethAddress,
+        window.ethereum
+      );
+      
+      // Submit to chain
+      const hash = await submitTransaction(signedTx, rpcUrl);
+      setTxHash(hash);
+    } catch (e: any) {
+      setSubmitError(e.message || "Submission failed");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
       <main className="flex min-h-screen items-center justify-center p-6">
         <div className="glass-card p-8 max-w-md text-center">
           <h1 className="text-xl font-semibold mb-2">Connect first</h1>
@@ -165,6 +213,24 @@ export default function AdminPage() {
       </section>
 
       {payload && (
+        <div className="space-y-2">
+          <button
+            onClick={submitTransaction}
+            disabled={submitting}
+            className="w-full py-2 px-4 bg-gradient-to-r from-emerald-600 to-indigo-700 text-white font-semibold rounded-lg hover:opacity-90 transition disabled:opacity-50"
+          >
+            {submitting ? "Signing & Submitting..." : "Sign & Submit Transaction"}
+          </button>
+          {submitError && <p className="text-xs text-red-400">{submitError}</p>}
+          {txHash && (
+            <div className="glass-card p-3 text-xs">
+              <div className="text-emerald-400 font-semibold mb-1">✓ Transaction Submitted</div>
+              <div className="font-mono break-all text-gray-300">{txHash}</div>
+            </div>
+          )}
+        </div>
+      )}
+      {false && (
         <pre className="glass-card p-4 text-xs overflow-x-auto text-gray-300 animate-fade-up opacity-0">{payload}</pre>
       )}
     </main>

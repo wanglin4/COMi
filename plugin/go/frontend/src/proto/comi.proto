@@ -1,0 +1,209 @@
+syntax = "proto3";
+package types;
+option go_package = "comi/contract";
+
+// AssetClass is the product family an asset belongs to.
+// SYNTH is reserved for phase 2 and is rejected by RegisterAsset until enabled.
+enum AssetClass {
+  ASSET_CLASS_UNSPECIFIED = 0;
+  ASSET_CLASS_RWA = 1;
+  ASSET_CLASS_BOND = 2;
+  ASSET_CLASS_SYNTH = 3;
+}
+
+// GatePolicy decides who may hold, transfer and trade an asset.
+// ATTESTER (attester-signed approvals) is reserved for phase 2.
+enum GatePolicy {
+  GATE_POLICY_UNSPECIFIED = 0;
+  GATE_POLICY_ALLOWLIST = 1;
+  GATE_POLICY_ATTESTER = 2;
+  GATE_POLICY_OPEN = 3;
+}
+
+// Asset is a registry record.
+message Asset {
+  // id: sequential identifier assigned at registration (starts at 1)
+  uint64 id = 1;
+  // symbol: unique ticker, 2-12 chars of A-Z / 0-9, starting with a letter
+  string symbol = 2;
+  // class: RWA, BOND or SYNTH
+  AssetClass class = 3;
+  // issuer: the 20-byte address of the asset issuer
+  bytes issuer = 4;
+  // gate_policy: how holders are admitted
+  GatePolicy gate_policy = 5; // @gotags: json:"gatePolicy"
+  // tier: 1 = eligible as cUSD collateral (at a haircut, later phase), 2 = listed and tradable only
+  uint32 tier = 6;
+}
+
+// MessageRegisterAsset lists a new asset. Admin only (phase 1).
+message MessageRegisterAsset {
+  string symbol = 1;
+  AssetClass class = 2;
+  bytes issuer = 3;
+  GatePolicy gate_policy = 4; // @gotags: json:"gatePolicy"
+  uint32 tier = 5;
+}
+
+// MessageSetGate adds or revokes an address on an asset's allowlist. Admin only (phase 1).
+message MessageSetGate {
+  uint64 asset_id = 1; // @gotags: json:"assetId"
+  bytes address = 2;
+  bool allowed = 3;
+}
+
+// RegistryMeta is the singleton registry counter.
+message RegistryMeta {
+  // asset_count: number of assets registered so far (the last assigned asset id)
+  uint64 asset_count = 1; // @gotags: json:"assetCount"
+}
+
+// AdminConfig is the singleton governance record written at genesis.
+message AdminConfig {
+  // admin: the 20-byte address allowed to list assets and manage gates
+  bytes admin = 1;
+}
+
+// EventAssetRegistered is emitted when an asset is listed.
+message EventAssetRegistered {
+  uint64 asset_id = 1; // @gotags: json:"assetId"
+  string symbol = 2;
+  AssetClass class = 3;
+  bytes issuer = 4;
+  GatePolicy gate_policy = 5; // @gotags: json:"gatePolicy"
+  uint32 tier = 6;
+}
+
+// EventGateSet is emitted when an allowlist entry is added or revoked.
+message EventGateSet {
+  uint64 asset_id = 1; // @gotags: json:"assetId"
+  bytes address = 2;
+  bool allowed = 3;
+}
+
+// ---------------------------------------------------------------------------------------------
+// cUSD: over-collateralized, CNPY-backed stablecoin (units: 1 cUSD = 1,000,000 micro-cUSD;
+// collateral is uCNPY; price is micro-cUSD per 1 CNPY, i.e. USD price x 1,000,000)
+// ---------------------------------------------------------------------------------------------
+
+// CUSDParams are the admin-set risk parameters. Until they are set, no cUSD operation that needs them can run.
+message CUSDParams {
+  // supply_cap: maximum total outstanding cUSD debt, in micro-cUSD (0 pauses minting)
+  uint64 supply_cap = 1; // @gotags: json:"supplyCap"
+  // min_collateral_bps: minimum collateral ratio to mint or withdraw, in basis points (>= 15000 = 150%)
+  uint32 min_collateral_bps = 2; // @gotags: json:"minCollateralBps"
+  // liquidation_bps: a vault below this ratio can be liquidated (must be below min_collateral_bps)
+  uint32 liquidation_bps = 3; // @gotags: json:"liquidationBps"
+  // liquidation_penalty_bps: bonus the liquidator receives, in basis points
+  uint32 liquidation_penalty_bps = 4; // @gotags: json:"liquidationPenaltyBps"
+  // max_price_age: the price is stale after this many blocks and blocks mint, withdraw and liquidate
+  uint64 max_price_age = 5; // @gotags: json:"maxPriceAge"
+  // max_price_move_bps: the largest allowed change per price update, in basis points
+  uint32 max_price_move_bps = 6; // @gotags: json:"maxPriceMoveBps"
+}
+
+// PriceRecord is the admin-posted CNPY price.
+message PriceRecord {
+  // price: micro-cUSD per 1 CNPY
+  uint64 price = 1;
+  // height: the block height the price was posted at
+  uint64 height = 2;
+}
+
+// CUSDSupply is the singleton total of outstanding cUSD debt (equals the sum of all cUSD balances).
+message CUSDSupply {
+  uint64 total_debt = 1; // @gotags: json:"totalDebt"
+}
+
+// CUSDAccount is an address's cUSD balance.
+message CUSDAccount {
+  uint64 amount = 1;
+}
+
+// Vault is an address's collateral position.
+message Vault {
+  // collateral: uCNPY locked in the collateral pool for this vault
+  uint64 collateral = 1;
+  // debt: micro-cUSD owed
+  uint64 debt = 2;
+}
+
+// MessageSetCUSDParams replaces the risk parameters. Admin only.
+message MessageSetCUSDParams {
+  CUSDParams params = 1;
+}
+
+// MessagePostPrice posts the CNPY price. Admin only; each update is bounded by max_price_move_bps.
+message MessagePostPrice {
+  uint64 price = 1;
+}
+
+// MessageVaultDeposit locks uCNPY from the sender into their vault. Gated.
+message MessageVaultDeposit {
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  uint64 amount = 2;
+}
+
+// MessageVaultWithdraw unlocks uCNPY from the sender's vault. Never gated (exit right).
+message MessageVaultWithdraw {
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  uint64 amount = 2;
+}
+
+// MessageCUSDMint borrows cUSD against the sender's vault. Gated.
+message MessageCUSDMint {
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  uint64 amount = 2;
+}
+
+// MessageCUSDBurn repays the sender's debt from their cUSD balance. Never gated (exit right).
+message MessageCUSDBurn {
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  uint64 amount = 2;
+}
+
+// MessageCUSDTransfer moves cUSD between two gated addresses.
+message MessageCUSDTransfer {
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  bytes to_address = 2; // @gotags: json:"toAddress"
+  uint64 amount = 3;
+}
+
+// MessageLiquidate repays part of an unhealthy vault's debt and seizes collateral plus the penalty. Gated.
+message MessageLiquidate {
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  bytes vault_owner = 2; // @gotags: json:"vaultOwner"
+  uint64 repay_amount = 3; // @gotags: json:"repayAmount"
+}
+
+// EventPricePosted is emitted when the price is posted.
+message EventPricePosted {
+  uint64 price = 1;
+  uint64 height = 2;
+}
+
+// EventVaultUpdated is emitted on deposit, withdraw, mint and burn.
+message EventVaultUpdated {
+  string action = 1; // deposit | withdraw | mint | burn
+  bytes owner = 2;
+  uint64 amount = 3;
+  uint64 collateral = 4;
+  uint64 debt = 5;
+}
+
+// EventCUSDTransfer is emitted when cUSD moves between addresses.
+message EventCUSDTransfer {
+  bytes from_address = 1; // @gotags: json:"fromAddress"
+  bytes to_address = 2; // @gotags: json:"toAddress"
+  uint64 amount = 3;
+}
+
+// EventLiquidated is emitted when a vault is (partly) liquidated.
+message EventLiquidated {
+  bytes vault_owner = 1; // @gotags: json:"vaultOwner"
+  bytes liquidator = 2;
+  uint64 repaid = 3;
+  uint64 seized_collateral = 4; // @gotags: json:"seizedCollateral"
+  uint64 remaining_debt = 5; // @gotags: json:"remainingDebt"
+  uint64 remaining_collateral = 6; // @gotags: json:"remainingCollateral"
+}

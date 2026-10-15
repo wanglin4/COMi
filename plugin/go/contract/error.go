@@ -174,3 +174,31 @@ func ErrSelfTransfer() *PluginError {
 func ErrLiquidationTooLarge() *PluginError {
 	return NewError(39, DefaultModule, "liquidation would seize more collateral than the vault holds")
 }
+
+func ErrInsufficientUnits() *PluginError {
+	return NewError(40, DefaultModule, "insufficient asset units")
+}
+
+func ErrOrderNotFound() *PluginError {
+	return NewError(41, DefaultModule, "order not found")
+}
+
+func ErrNotOrderOwner() *PluginError {
+	return NewError(42, DefaultModule, "signer does not own this order")
+}
+
+func ErrInvalidSide() *PluginError {
+	return NewError(43, DefaultModule, "order side must be buy or sell")
+}
+
+func ErrSelfTrade() *PluginError {
+	return NewError(44, DefaultModule, "order would match the owner's own resting order; cancel it first")
+}
+
+func ErrCorruptState() *PluginError {
+	return NewError(45, DefaultModule, "state is inconsistent: a book entry points at a missing order")
+}
+
+func ErrReservedAddress() *PluginError {
+	return NewError(46, DefaultModule, "address is reserved by the protocol")
+}

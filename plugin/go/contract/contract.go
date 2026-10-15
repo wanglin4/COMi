@@ -26,7 +26,8 @@ var ContractConfig = &PluginConfig{
 	Id:      1,
 	Version: 1,
 	SupportedTransactions: []string{"send", "register_asset", "set_gate", "set_cusd_params", "post_price",
-		"vault_deposit", "vault_withdraw", "cusd_mint", "cusd_burn", "cusd_transfer", "liquidate"},
+		"vault_deposit", "vault_withdraw", "cusd_mint", "cusd_burn", "cusd_transfer", "liquidate",
+		"issue_units", "transfer_units", "place_order", "cancel_order"},
 	// NOTE: SupportedTransactions and TransactionTypeUrls are aligned by index
 	TransactionTypeUrls: []string{
 		"type.googleapis.com/types.MessageSend",
@@ -40,6 +41,10 @@ var ContractConfig = &PluginConfig{
 		"type.googleapis.com/types.MessageCUSDBurn",
 		"type.googleapis.com/types.MessageCUSDTransfer",
 		"type.googleapis.com/types.MessageLiquidate",
+		"type.googleapis.com/types.MessageIssueUnits",
+		"type.googleapis.com/types.MessageTransferUnits",
+		"type.googleapis.com/types.MessagePlaceOrder",
+		"type.googleapis.com/types.MessageCancelOrder",
 	},
 	EventTypeUrls: []string{
 		"type.googleapis.com/types.EventAssetRegistered",
@@ -48,6 +53,11 @@ var ContractConfig = &PluginConfig{
 		"type.googleapis.com/types.EventVaultUpdated",
 		"type.googleapis.com/types.EventCUSDTransfer",
 		"type.googleapis.com/types.EventLiquidated",
+		"type.googleapis.com/types.EventUnitsIssued",
+		"type.googleapis.com/types.EventUnitsTransferred",
+		"type.googleapis.com/types.EventOrderPlaced",
+		"type.googleapis.com/types.EventTrade",
+		"type.googleapis.com/types.EventOrderCancelled",
 	},
 	CustomStatePrefixes: CustomStatePrefixes(),
 }
@@ -58,6 +68,7 @@ func init() {
 	file_account_proto_init()
 	file_comi_proto_init()
 	file_event_proto_init()
+	file_orders_proto_init()
 	file_plugin_proto_init()
 	file_tx_proto_init()
 
@@ -65,7 +76,7 @@ func init() {
 	// Include google/protobuf/any.proto first as it's a dependency of event.proto and tx.proto
 	for _, file := range []protoreflect.FileDescriptor{
 		anypb.File_google_protobuf_any_proto,
-		File_account_proto, File_comi_proto, File_event_proto, File_plugin_proto, File_tx_proto,
+		File_account_proto, File_comi_proto, File_event_proto, File_orders_proto, File_plugin_proto, File_tx_proto,
 	} {
 		fd, _ := proto.Marshal(protodesc.ToFileDescriptorProto(file))
 		fds = append(fds, fd)
@@ -174,6 +185,14 @@ func (c *Contract) CheckTx(request *PluginCheckRequest) *PluginCheckResponse {
 		return c.CheckCUSDTransfer(x)
 	case *MessageLiquidate:
 		return c.CheckLiquidate(x)
+	case *MessageIssueUnits:
+		return c.CheckIssueUnits(x)
+	case *MessageTransferUnits:
+		return c.CheckTransferUnits(x)
+	case *MessagePlaceOrder:
+		return c.CheckPlaceOrder(x)
+	case *MessageCancelOrder:
+		return c.CheckCancelOrder(x)
 	default:
 		return &PluginCheckResponse{Error: ErrInvalidMessageCast()}
 	}
@@ -214,6 +233,14 @@ func (c *Contract) DeliverTx(request *PluginDeliverRequest) *PluginDeliverRespon
 		return c.DeliverCUSDTransfer(x, request.Tx.Fee, request.Tx.Memo)
 	case *MessageLiquidate:
 		return c.DeliverLiquidate(x, request.Tx.Fee, request.Tx.Memo, request.Height)
+	case *MessageIssueUnits:
+		return c.DeliverIssueUnits(x, request.Tx.Fee, request.Tx.Memo)
+	case *MessageTransferUnits:
+		return c.DeliverTransferUnits(x, request.Tx.Fee, request.Tx.Memo)
+	case *MessagePlaceOrder:
+		return c.DeliverPlaceOrder(x, request.Tx.Fee, request.Tx.Memo)
+	case *MessageCancelOrder:
+		return c.DeliverCancelOrder(x, request.Tx.Fee, request.Tx.Memo)
 	default:
 		return &PluginDeliverResponse{Error: ErrInvalidMessageCast()}
 	}

@@ -1,0 +1,125 @@
+syntax = "proto3";
+package types;
+option go_package = "comi/contract";
+
+// Side is the direction of an order.
+enum Side {
+  SIDE_UNSPECIFIED = 0;
+  SIDE_BUY = 1;
+  SIDE_SELL = 2;
+}
+
+// Holding is an address's balance of one registered asset (whole units).
+message Holding {
+  uint64 amount = 1;
+}
+
+// UnitSupply is the total units the issuer has minted for an asset.
+message UnitSupply {
+  uint64 issued = 1;
+}
+
+// OrderMeta is the singleton order counter (the last assigned order id).
+message OrderMeta {
+  uint64 order_count = 1; // @gotags: json:"orderCount"
+}
+
+// Order is a resting limit order. Funds backing it sit in escrow: cUSD for buys, units for sells.
+message Order {
+  // id: sequential id; lower id = earlier = higher time priority
+  uint64 id = 1;
+  uint64 asset_id = 2; // @gotags: json:"assetId"
+  bytes owner = 3;
+  Side side = 4;
+  // price: micro-cUSD per 1 unit
+  uint64 price = 5;
+  // remaining: units still open
+  uint64 remaining = 6;
+}
+
+// MessageIssueUnits mints units of an asset to a gated holder. Signed by the asset's issuer.
+message MessageIssueUnits {
+  uint64 asset_id = 1; // @gotags: json:"assetId"
+  bytes to = 2;
+  uint64 amount = 3;
+}
+
+// MessageTransferUnits moves units between two gated holders. Signed by the sender.
+message MessageTransferUnits {
+  uint64 asset_id = 1; // @gotags: json:"assetId"
+  bytes from_address = 2; // @gotags: json:"fromAddress"
+  bytes to_address = 3; // @gotags: json:"toAddress"
+  uint64 amount = 4;
+}
+
+// MessagePlaceOrder places a limit order. It matches against the opposite side first; any remainder
+// rests on the book (or is refunded if the match cap was hit). Signed by the owner.
+message MessagePlaceOrder {
+  uint64 asset_id = 1; // @gotags: json:"assetId"
+  bytes owner = 2;
+  Side side = 3;
+  // price: micro-cUSD per 1 unit
+  uint64 price = 4;
+  // amount: units to buy or sell
+  uint64 amount = 5;
+}
+
+// MessageCancelOrder cancels a resting order and refunds its escrow. Never gated. Signed by the owner.
+message MessageCancelOrder {
+  bytes owner = 1;
+  uint64 order_id = 2; // @gotags: json:"orderId"
+}
+
+// EventUnitsIssued is emitted when units are minted.
+message EventUnitsIssued {
+  uint64 asset_id = 1; // @gotags: json:"assetId"
+  bytes to = 2;
+  uint64 amount = 3;
+  // issued: total units issued after this mint
+  uint64 issued = 4;
+}
+
+// EventUnitsTransferred is emitted when units move between holders.
+message EventUnitsTransferred {
+  uint64 asset_id = 1; // @gotags: json:"assetId"
+  bytes from_address = 2; // @gotags: json:"fromAddress"
+  bytes to_address = 3; // @gotags: json:"toAddress"
+  uint64 amount = 4;
+}
+
+// EventOrderPlaced is emitted once per placed order, before its trades.
+message EventOrderPlaced {
+  uint64 order_id = 1; // @gotags: json:"orderId"
+  uint64 asset_id = 2; // @gotags: json:"assetId"
+  bytes owner = 3;
+  Side side = 4;
+  uint64 price = 5;
+  uint64 amount = 6;
+  // filled: units matched immediately
+  uint64 filled = 7;
+  // resting: true when the unfilled remainder was left on the book
+  bool resting = 8;
+}
+
+// EventTrade is emitted for every fill. The trade price is always the resting (maker) order's price.
+message EventTrade {
+  uint64 asset_id = 1; // @gotags: json:"assetId"
+  uint64 buy_order_id = 2; // @gotags: json:"buyOrderId"
+  uint64 sell_order_id = 3; // @gotags: json:"sellOrderId"
+  uint64 taker_order_id = 4; // @gotags: json:"takerOrderId"
+  bytes buyer = 5;
+  bytes seller = 6;
+  uint64 price = 7;
+  uint64 amount = 8;
+}
+
+// EventOrderCancelled is emitted when an order is cancelled or refunded.
+message EventOrderCancelled {
+  uint64 order_id = 1; // @gotags: json:"orderId"
+  uint64 asset_id = 2; // @gotags: json:"assetId"
+  bytes owner = 3;
+  // remaining: units that were still open
+  uint64 remaining = 4;
+  // reason: "cancelled" | "gate_revoked" | "match_cap"
+  string reason = 5;
+}
