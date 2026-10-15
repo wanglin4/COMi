@@ -27,7 +27,8 @@ var ContractConfig = &PluginConfig{
 	Version: 1,
 	SupportedTransactions: []string{"send", "register_asset", "set_gate", "set_cusd_params", "post_price",
 		"vault_deposit", "vault_withdraw", "cusd_mint", "cusd_burn", "cusd_transfer", "liquidate",
-		"issue_units", "transfer_units", "place_order", "cancel_order", "set_oracle", "report_price"},
+		"issue_units", "transfer_units", "place_order", "cancel_order", "set_oracle", "report_price",
+		"post_nav", "fund_yield", "claim_yield"},
 	// NOTE: SupportedTransactions and TransactionTypeUrls are aligned by index
 	TransactionTypeUrls: []string{
 		"type.googleapis.com/types.MessageSend",
@@ -47,6 +48,9 @@ var ContractConfig = &PluginConfig{
 		"type.googleapis.com/types.MessageCancelOrder",
 		"type.googleapis.com/types.MessageSetOracle",
 		"type.googleapis.com/types.MessageReportPrice",
+		"type.googleapis.com/types.MessagePostNav",
+		"type.googleapis.com/types.MessageFundYield",
+		"type.googleapis.com/types.MessageClaimYield",
 	},
 	EventTypeUrls: []string{
 		"type.googleapis.com/types.EventAssetRegistered",
@@ -62,6 +66,9 @@ var ContractConfig = &PluginConfig{
 		"type.googleapis.com/types.EventOrderCancelled",
 		"type.googleapis.com/types.EventOracleSet",
 		"type.googleapis.com/types.EventPriceReported",
+		"type.googleapis.com/types.EventNavPosted",
+		"type.googleapis.com/types.EventYieldFunded",
+		"type.googleapis.com/types.EventYieldClaimed",
 	},
 	CustomStatePrefixes: CustomStatePrefixes(),
 }
@@ -70,6 +77,7 @@ var ContractConfig = &PluginConfig{
 func init() {
 	// Explicitly initialize the proto files first to ensure File_*_proto are set
 	file_account_proto_init()
+	file_bond_proto_init()
 	file_comi_proto_init()
 	file_event_proto_init()
 	file_oracle_proto_init()
@@ -81,7 +89,7 @@ func init() {
 	// Include google/protobuf/any.proto first as it's a dependency of event.proto and tx.proto
 	for _, file := range []protoreflect.FileDescriptor{
 		anypb.File_google_protobuf_any_proto,
-		File_account_proto, File_comi_proto, File_event_proto, File_oracle_proto, File_orders_proto, File_plugin_proto, File_tx_proto,
+		File_account_proto, File_bond_proto, File_comi_proto, File_event_proto, File_oracle_proto, File_orders_proto, File_plugin_proto, File_tx_proto,
 	} {
 		fd, _ := proto.Marshal(protodesc.ToFileDescriptorProto(file))
 		fds = append(fds, fd)
@@ -202,6 +210,12 @@ func (c *Contract) CheckTx(request *PluginCheckRequest) *PluginCheckResponse {
 		return c.CheckSetOracle(x)
 	case *MessageReportPrice:
 		return c.CheckReportPrice(x)
+	case *MessagePostNav:
+		return c.CheckPostNav(x)
+	case *MessageFundYield:
+		return c.CheckFundYield(x)
+	case *MessageClaimYield:
+		return c.CheckClaimYield(x)
 	default:
 		return &PluginCheckResponse{Error: ErrInvalidMessageCast()}
 	}
@@ -254,6 +268,12 @@ func (c *Contract) DeliverTx(request *PluginDeliverRequest) *PluginDeliverRespon
 		return c.DeliverSetOracle(x, request.Tx.Fee, request.Tx.Memo)
 	case *MessageReportPrice:
 		return c.DeliverReportPrice(x, request.Tx.Fee, request.Tx.Memo, request.Height)
+	case *MessagePostNav:
+		return c.DeliverPostNav(x, request.Tx.Fee, request.Tx.Memo, request.Height)
+	case *MessageFundYield:
+		return c.DeliverFundYield(x, request.Tx.Fee, request.Tx.Memo)
+	case *MessageClaimYield:
+		return c.DeliverClaimYield(x, request.Tx.Fee, request.Tx.Memo)
 	default:
 		return &PluginDeliverResponse{Error: ErrInvalidMessageCast()}
 	}

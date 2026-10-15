@@ -1,0 +1,74 @@
+syntax = "proto3";
+package types;
+option go_package = "comi/contract";
+
+// NavRecord is the admin-posted net asset value of a tier one asset (micro-cUSD per 1 unit).
+message NavRecord {
+  uint64 nav = 1;
+  // height: the block height the NAV was posted at
+  uint64 height = 2;
+}
+
+// YieldPool is the per-asset yield accumulator of a bond. Each funding round adds
+// floor(amount x 1e18 / eligible units) to index, so a holder's entitlement is
+// units x (index - last_index) / 1e18 without ever iterating over holders.
+message YieldPool {
+  // index: cumulative yield per unit, scaled by 1e18, as a big-endian unsigned integer
+  bytes index = 1;
+  // funded: total cUSD the issuer has paid in; always at least what holders can ever claim
+  uint64 funded = 2;
+  // claimed: total cUSD holders have withdrawn
+  uint64 claimed = 3;
+}
+
+// YieldAccount is one holder's settled position in an asset's YieldPool.
+message YieldAccount {
+  // last_index: the pool index this holder was last settled at (big-endian unsigned integer)
+  bytes last_index = 1; // @gotags: json:"lastIndex"
+  // accrued: settled but unclaimed yield, in micro-cUSD
+  uint64 accrued = 2;
+}
+
+// MessagePostNav posts the NAV of a tier one asset. Signed by the admin.
+message MessagePostNav {
+  uint64 asset_id = 1; // @gotags: json:"assetId"
+  // nav: micro-cUSD per 1 unit
+  uint64 nav = 2;
+}
+
+// MessageFundYield pays up to `amount` micro-cUSD of yield to the current holders of a bond, pro rata
+// to their units. Signed by the asset's issuer. The amount actually charged (never more than `amount`;
+// rounding leaves sub-micro-cUSD dust in escrow) is reported in EventYieldFunded.
+message MessageFundYield {
+  uint64 asset_id = 1; // @gotags: json:"assetId"
+  uint64 amount = 2;
+}
+
+// MessageClaimYield withdraws all of a holder's accrued yield as cUSD. Signed by the holder.
+message MessageClaimYield {
+  uint64 asset_id = 1; // @gotags: json:"assetId"
+  bytes holder = 2;
+}
+
+// EventNavPosted is emitted when the admin posts a NAV.
+message EventNavPosted {
+  uint64 asset_id = 1; // @gotags: json:"assetId"
+  uint64 nav = 2;
+  uint64 height = 3;
+}
+
+// EventYieldFunded is emitted when the issuer funds a yield round.
+message EventYieldFunded {
+  uint64 asset_id = 1; // @gotags: json:"assetId"
+  // amount: micro-cUSD actually charged to the issuer this round
+  uint64 amount = 2;
+  // eligible_units: units that share the round (issued units minus units resting in order escrow)
+  uint64 eligible_units = 3; // @gotags: json:"eligibleUnits"
+}
+
+// EventYieldClaimed is emitted when a holder claims accrued yield.
+message EventYieldClaimed {
+  uint64 asset_id = 1; // @gotags: json:"assetId"
+  bytes holder = 2;
+  uint64 amount = 3;
+}

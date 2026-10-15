@@ -20,6 +20,7 @@ var (
 	ownerOrderPrefix = []byte{109} // orders by owner index:    109 / owner / order id
 	reportPrefix      = []byte{110} // reporter price reports:   110 / reporter
 	assetOraclePrefix = []byte{111} // asset trade history:      111 / asset id
+	yieldPrefix       = []byte{112} // bond yield positions:     112 / asset id / address
 )
 
 // CollateralPoolID is the core pool that holds all vault collateral (uCNPY). It sits above core's
@@ -33,7 +34,7 @@ const CUSDGateID uint64 = 0
 // CustomStatePrefixes returns the prefixes declared to core at handshake
 func CustomStatePrefixes() [][]byte {
 	return [][]byte{assetPrefix, symbolPrefix, gatePrefix, metaPrefix, cusdPrefix, vaultPrefix,
-		holdingPrefix, orderPrefix, bookPrefix, ownerOrderPrefix, reportPrefix, assetOraclePrefix}
+		holdingPrefix, orderPrefix, bookPrefix, ownerOrderPrefix, reportPrefix, assetOraclePrefix, yieldPrefix}
 }
 
 // KeyForAsset() returns the state key of an asset record
@@ -114,6 +115,19 @@ func KeyForReport(reporter []byte) []byte { return JoinLenPrefix(reportPrefix, r
 // KeyForAssetOracle() returns the state key of an asset's trade history
 func KeyForAssetOracle(assetId uint64) []byte {
 	return JoinLenPrefix(assetOraclePrefix, formatUint64(assetId))
+}
+
+// KeyForNav() returns the state key of a tier one asset's NavRecord
+func KeyForNav(assetId uint64) []byte { return JoinLenPrefix(metaPrefix, []byte("nav"), formatUint64(assetId)) }
+
+// KeyForYieldPool() returns the state key of a bond's YieldPool
+func KeyForYieldPool(assetId uint64) []byte {
+	return JoinLenPrefix(metaPrefix, []byte("yield"), formatUint64(assetId))
+}
+
+// KeyForYieldAccount() returns the state key of an address's YieldAccount for a bond
+func KeyForYieldAccount(assetId uint64, addr []byte) []byte {
+	return JoinLenPrefix(yieldPrefix, formatUint64(assetId), addr)
 }
 
 // KeyForPool() returns the state key of a core pool

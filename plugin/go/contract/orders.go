@@ -50,6 +50,8 @@ func orderCost(price, amount uint64) (uint64, bool) {
 type ledger struct {
 	s stateIO
 	b *batch
+	// yieldIdx caches each bond's yield pool index for the life of the ledger (see bond.go)
+	yieldIdx map[uint64]*big.Int
 }
 
 func newLedger(s stateIO) *ledger { return &ledger{s: s, b: newBatch()} }
@@ -103,6 +105,10 @@ func (l *ledger) units(assetId uint64, addr []byte) (uint64, *PluginError) {
 }
 
 func (l *ledger) setUnits(assetId uint64, addr []byte, amt uint64) *PluginError {
+	// settle the holder's bond yield on the balance held so far, before the balance changes
+	if _, err := l.settleYield(assetId, addr, amt); err != nil {
+		return err
+	}
 	if amt == 0 {
 		l.b.del(KeyForHolding(assetId, addr))
 		return nil
@@ -260,7 +266,7 @@ func validHolder(addr []byte) *PluginError {
 	if len(addr) != 20 {
 		return ErrInvalidAddress()
 	}
-	if bytes.Equal(addr, escrowAddr) {
+	if bytes.Equal(addr, escrowAddr) || bytes.Equal(addr, yieldEscrowAddr) {
 		return ErrReservedAddress()
 	}
 	return nil

@@ -210,3 +210,27 @@ func ErrNotReporter() *PluginError {
 func ErrOracleManaged() *PluginError {
 	return NewError(48, DefaultModule, "the price is set by reporters; the admin cannot post it directly")
 }
+
+func ErrInvalidNav() *PluginError {
+	return NewError(49, DefaultModule, "NAV must be greater than zero and below the maximum")
+}
+
+func ErrNavMoveTooLarge() *PluginError {
+	return NewError(50, DefaultModule, "NAV update exceeds the maximum allowed move")
+}
+
+func ErrNotTierOne() *PluginError {
+	return NewError(51, DefaultModule, "only tier one assets carry a NAV")
+}
+
+func ErrNotYieldAsset() *PluginError {
+	return NewError(52, DefaultModule, "only bond assets pay yield")
+}
+
+func ErrNoEligibleUnits() *PluginError {
+	return NewError(53, DefaultModule, "no units are eligible to receive yield")
+}
+
+func ErrNothingToClaim() *PluginError {
+	return NewError(54, DefaultModule, "no yield is available to claim")
+}

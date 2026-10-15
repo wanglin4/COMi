@@ -9,8 +9,8 @@ Gated asset engine on Canopy: RWA, bonds and (phase 2) synthetics behind one sha
 | 1 | Scaffold from the official Canopy Go plugin | done |
 | 2 | Gate + asset registry (`register_asset`, `set_gate`) | done, unit tested |
 | 3 | cUSD: vaults, price, mint/burn/transfer, liquidation | done, unit tested |
-| 4 | Tier-one bond, NAV, `claim_yield` | not started |
-| 5 | Trading | not started |
+| 4 | Tier-one NAV and bond yield (`post_nav`, `fund_yield`, `claim_yield`) | done, unit tested |
+| 5 | Trading (`issue_units`, `transfer_units`, `place_order`, `cancel_order`) and the price oracle (`set_oracle`, `report_price`) | done, unit tested |
 | 6 | Synthetics (phase 2) | rejected by `RegisterAsset` until enabled |
 
 ## Transactions
@@ -28,6 +28,15 @@ Gated asset engine on Canopy: RWA, bonds and (phase 2) synthetics behind one sha
 | `cusd_burn` | `MessageCUSDBurn` | sender | repays debt from the sender's cUSD |
 | `cusd_transfer` | `MessageCUSDTransfer` | sender (gated, both ends) | moves cUSD |
 | `liquidate` | `MessageLiquidate` | liquidator (gated) | repays part of an unhealthy vault's debt and seizes collateral plus the penalty |
+| `issue_units` | `MessageIssueUnits` | asset issuer | mints units of an asset to a gated holder |
+| `transfer_units` | `MessageTransferUnits` | sender (gated, both ends) | moves asset units |
+| `place_order` | `MessagePlaceOrder` | owner (gated on the asset and on cUSD) | limit order priced in cUSD; matches, then rests any remainder |
+| `cancel_order` | `MessageCancelOrder` | owner | cancels a resting order and refunds its escrow (never gated) |
+| `set_oracle` | `MessageSetOracle` | admin | sets the price reporters and oracle parameters |
+| `report_price` | `MessageReportPrice` | reporter | submits a CNPY price; the oracle price is the median of fresh reports |
+| `post_nav` | `MessagePostNav` | admin | posts the NAV of a tier one asset, each update bounded to 50% |
+| `fund_yield` | `MessageFundYield` | bond issuer | pays cUSD yield to the bond's current holders, pro rata |
+| `claim_yield` | `MessageClaimYield` | holder (gated on the bond and on cUSD) | withdraws the holder's accrued yield as cUSD |
 
 Core does not deduct fees for plugin transactions, so every COMi transaction debits `tx.fee` from the admin and credits the fee pool. The governance `send_fee` is the minimum fee for all types.
 
@@ -42,6 +51,18 @@ Over-collateralized, CNPY-backed. Units: collateral in uCNPY, cUSD in micro-cUSD
 - Liquidation is partial: the liquidator chooses `repay_amount` and receives `floor(repay x (1 + penalty))` of value in collateral. A repay that would seize more than the vault holds is rejected.
 
 Known limits of this step: there is no bad-debt waterfall or reserve fund yet (a vault pushed below 100% keeps residual debt with no collateral), the price has no escape-hatch re-anchor, and there is no redemption queue.
+
+## Tier-one NAV and bond yield
+
+`bond.go`. **NAV**: the admin posts a net asset value (micro-cUSD per unit) for any tier-one asset; after the first post an update may move it by at most 50% (the same hard ceiling as the CNPY price). NAV is a reference value; nothing spends it yet.
+
+**Yield**: only assets of class `BOND` pay yield. The issuer funds a round with `fund_yield`, which moves cUSD into `yieldEscrowAddr` (a protocol address nobody holds a key for, so the cUSD supply invariant still holds) and credits every eligible unit equally. Holders withdraw with `claim_yield`.
+
+- Accounting is a per-unit accumulator (`YieldPool.index`, scaled by 1e18), so neither funding nor claiming iterates over holders. Every balance change settles the holder first (`ledger.settleYield`, called from `ledger.setUnits`, the only writer of holdings), so nobody earns on units they did not hold, and a new holder starts at the current index.
+- Eligible units = issued units minus units resting in order escrow. Escrowed units earn nothing while they rest.
+- Holders' payouts round down and the issuer's charge rounds up (never above the requested amount), so claims can never exceed what was funded. The sub-micro-cUSD dust stays in yield escrow. A round too small to give any unit a whole micro-cUSD is rejected.
+- A seller keeps what it earned before selling, even with a zero balance. A holder revoked from the bond's gate or the cUSD gate cannot claim until re-allowed.
+- Asserted in the tests after every operation: escrow equals `funded - claimed`, and everything holders could still claim fits inside it. A randomized test drives issues, transfers, trades, funding and claims and checks each holder was paid at most its exact share.
 
 ## The gate
 
@@ -61,6 +82,15 @@ All keys are built with `JoinLenPrefix` and use custom prefixes outside core's r
 | 103 | `103 / "admin"`, `"count"`, `"cusd_params"`, `"price"`, `"cusd_supply"` | `AdminConfig`, `RegistryMeta`, `CUSDParams`, `PriceRecord`, `CUSDSupply` |
 | 104 | `104 / address` | `CUSDAccount` (cUSD balance) |
 | 105 | `105 / address` | `Vault` |
+| 106 | `106 / asset id / address` | `Holding` (asset unit balance) |
+| 107 | `107 / order id` | `Order` |
+| 108 | `108 / asset id / side / price key / order id` | order id (price-time book index) |
+| 109 | `109 / owner / order id` | `0x01` (orders by owner index) |
+| 110 | `110 / reporter` | latest price report |
+| 111 | `111 / asset id` | `AssetOracle` (trade history) |
+| 112 | `112 / asset id / address` | `YieldAccount` (a holder's yield position in a bond) |
+
+The `103` singletons also include `"units" / id` (`UnitSupply`), `"orders"` (`OrderMeta`), `"oracle"` (`OracleConfig`), `"nav" / id` (`NavRecord`) and `"yield" / id` (`YieldPool`).
 
 ## Genesis
 
@@ -85,6 +115,8 @@ The binary keeps the name `go-plugin` because Canopy's `pluginctl.sh` and the Do
 ## Not yet done
 
 - Admin rotation (`set_admin`) and multi-sig admin.
+- Using tier-one assets as cUSD collateral (NAV and the asset oracle exist, but nothing consumes them yet), synthetics (phase 2) and the attester gate.
+- Frontend forms for `set_cusd_params`, `post_price`, `set_oracle`, `issue_units`, `transfer_units`, `post_nav`, `fund_yield` and `claim_yield`.
 - Bad-debt waterfall, reserve fund and fee accounting (design steps for later).
 - Read-only query RPC (`/v1/query/asset`, gate lookups) via `QueryState`.
 - No integration test against a running Canopy node yet.
