@@ -1,6 +1,7 @@
-import protobuf from "protobufjs";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { hexToBytes, bytesToHex } from "@noble/hashes/utils.js";
+// @ts-ignore - generated static protobuf module (browser-safe)
+import * as pb from "@/proto/comi_pb";
 
 export interface TxParams {
   messageType: string;
@@ -15,47 +16,57 @@ export interface TxParams {
   memo?: string;
 }
 
-export interface SignedTransaction {
-  message_type: string;
-  msg: { type_url: string; value: string };
-  signature: {
-    public_key: string;
-    signature: string;
-  };
-  created_height: string;
-  time: string;
-  fee: string;
-  memo: string;
-  network_id: string;
-  chain_id: string;
-  nonce: string;
+const TYPE_NAMES: Record<string, string> = {
+  send: "MessageSend",
+  register_asset: "MessageRegisterAsset",
+  set_gate: "MessageSetGate",
+  set_cusd_params: "MessageSetCUSDParams",
+  post_price: "MessagePostPrice",
+  vault_deposit: "MessageVaultDeposit",
+  vault_withdraw: "MessageVaultWithdraw",
+  cusd_mint: "MessageCUSDMint",
+  cusd_burn: "MessageCUSDBurn",
+  cusd_transfer: "MessageCUSDTransfer",
+  liquidate: "MessageLiquidate",
+  issue_units: "MessageIssueUnits",
+  transfer_units: "MessageTransferUnits",
+  place_order: "MessagePlaceOrder",
+  cancel_order: "MessageCancelOrder",
+  set_oracle: "MessageSetOracle",
+  report_price: "MessageReportPrice",
+};
+
+// protobufjs bytes fields accept Uint8Array/base64, not 0x-hex: convert 20-byte hex addresses
+function normalizeBytes(obj: any): any {
+  if (Array.isArray(obj)) return obj.map(normalizeBytes);
+  if (obj && typeof obj === "object") {
+    const out: any = {};
+    for (const [k, v] of Object.entries(obj)) out[k] = normalizeBytes(v);
+    return out;
+  }
+  if (typeof obj === "string" && /^0x[0-9a-fA-F]{40}$/.test(obj)) return hexToBytes(obj.slice(2));
+  return obj;
 }
 
 export async function buildAndSignTransaction(
   params: TxParams,
   ethAddress: string,
   provider: any
-): Promise<SignedTransaction> {
-  // Load proto definitions
-  const root = await protobuf.load(["src/proto/tx.proto", "src/proto/comi.proto"]);
-  const Transaction = root.lookupType("types.Transaction");
-  const Signature = root.lookupType("types.Signature");
-  const Any = root.lookupType("google.protobuf.Any");
+): Promise<any> {
+  const P: any = pb as any;
+  const name = TYPE_NAMES[params.messageType];
+  if (!name) throw new Error(`Unsupported message type: ${params.messageType}`);
+  const MsgCtor = P.types[name];
+  if (!MsgCtor) throw new Error(`Proto class missing: types.${name}`);
 
-  // Encode the message payload
-  const MsgType = root.lookupType(`types.${params.messageType.replace("_", "")}`);
-  const msgEncoded = MsgType.encode(params.msg).finish();
+  const msgObj = MsgCtor.fromObject(normalizeBytes(params.msg));
+  const msgBytes = MsgCtor.encode(msgObj).finish();
 
-  // Build the Any wrapper
-  const anyPayload = Any.create({
-    type_url: params.typeUrl,
-    value: msgEncoded,
-  });
+  const anyObj = P.google.protobuf.Any.create({ type_url: params.typeUrl, value: msgBytes });
 
-  // Build unsigned transaction
-  const unsignedTx = Transaction.create({
+  const tx = P.types.Transaction.create({
     message_type: params.messageType,
-    msg: anyPayload,
+    msg: anyObj,
     created_height: params.createdHeight,
     time: Math.floor(Date.now() / 1000),
     fee: params.fee,
@@ -65,66 +76,53 @@ export async function buildAndSignTransaction(
     nonce: params.nonce,
   });
 
-  // Serialize to bytes
-  const txBytes = Transaction.encode(unsignedTx).finish();
-  
-  // Hash the transaction bytes
-  const txHash = sha256(txBytes);
-  const txHashHex = "0x" + bytesToHex(txHash);
+  const txBytes = P.types.Transaction.encode(tx).finish();
 
-  // Request signature from wallet
+  // NOTE(signing): Canopy verifies ethCrypto.VerifySignature(pubkey, SHA256(txBytes), sig64).
+  // Rabby personal_sign applies EIP-191 prefixing, so this signature will NOT verify until
+  // the protocol accepts EIP-191 digests or we switch to node-keystore signing.
+  // We sign the raw tx bytes here so the envelope is complete and the decision is isolated.
   const signature: string = await provider.request({
-    method: "eth_sign",
-    params: [ethAddress, txHashHex],
+    method: "personal_sign",
+    params: ["0x" + bytesToHex(txBytes), ethAddress],
   });
 
-  // Get public key (32 bytes compressed secp256k1)
-  // Note: eth_sign returns 65-byte signature (r, s, v), we need to extract pubkey
-  // For now, use a placeholder - actual implementation needs ecrecover
-  const pubkeyBytes = new Uint8Array(33); // Placeholder
-  
-  // Build signature object
-  const sig = Signature.create({
-    public_key: pubkeyBytes,
-    signature: hexToBytes(signature.startsWith("0x") ? signature.slice(2) : signature),
-  });
+  const sigBytes = hexToBytes(signature.startsWith("0x") ? signature.slice(2) : signature);
+  const sig64 = sigBytes.slice(0, 64); // drop recovery byte; Canopy expects r||s
 
-  // Build signed transaction
-  const signedTx = {
-    ...Transaction.toObject(unsignedTx),
-    signature: Signature.toObject(sig),
-  };
+  // TODO(signing-decision): replace placeholder with recovered/encoded pubkey per
+  // lib/crypto/eth_secp256k1.go (64-byte uncompressed, no SEC1 prefix) once Option A/B is chosen.
+  const pubkeyBytes = new Uint8Array(64);
 
-  return signedTx as SignedTransaction;
+  tx.signature = P.types.Signature.create({ public_key: pubkeyBytes, signature: sig64 });
+
+  return P.types.Transaction.toObject(tx, { bytes: String, longs: String });
 }
 
 export async function getAccountNonce(address: string, rpcUrl: string): Promise<number> {
   const response = await fetch(`${rpcUrl}/v1/account`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ address }),
+    body: JSON.stringify({ address: address.replace(/^0x/, "") }),
   });
-  
-  if (!response.ok) {
-    throw new Error(`Failed to fetch account: ${response.statusText}`);
-  }
-  
+  if (!response.ok) throw new Error(`Failed to fetch account: ${response.status} ${response.statusText}`);
   const account = await response.json();
-  return account.nonce || 0;
+  return Number(account.nonce || 0);
 }
 
-export async function submitTransaction(signedTx: SignedTransaction, rpcUrl: string): Promise<string> {
+export async function submitTransaction(signedTx: any, rpcUrl: string): Promise<string> {
   const response = await fetch(`${rpcUrl}/v1/tx`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(signedTx),
   });
-  
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Transaction submission failed");
+    const text = await response.text();
+    throw new Error(`Submission failed: ${response.status} ${text}`);
   }
-  
-  const txHash = await response.json();
-  return txHash;
+  return await response.json();
+}
+
+export function txDigestHex(signedTx: any): string {
+  return "(digest available after re-encode; unused until signing decision)";
 }
