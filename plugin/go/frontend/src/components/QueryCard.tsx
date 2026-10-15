@@ -15,17 +15,22 @@ export function QueryCard({
   render: (data: any) => ReactNode;
 }) {
   return (
-    <section className="glass-card p-6 space-y-3 animate-fade-up opacity-0">
-      <div>
-        <h2 className="font-semibold text-emerald-300">{title}</h2>
-        <p className="text-xs text-gray-500">{subtitle}</p>
+    <section className="glass-card p-5 space-y-4 animate-fade-up opacity-0">
+      <div className="border-b border-zinc-800 pb-3">
+        <h2 className="text-sm font-semibold text-zinc-100">{title}</h2>
+        <p className="text-xs text-zinc-500 mt-0.5">{subtitle}</p>
       </div>
-      {query.isLoading && <p className="text-sm text-gray-400">Reading from node…</p>}
+      {query.isLoading && (
+        <div className="flex items-center gap-2 text-sm text-zinc-400">
+          <div className="w-4 h-4 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
+          Reading from node…
+        </div>
+      )}
       {query.isError && (
-        <div className="text-xs text-amber-300 border border-amber-500/30 bg-amber-500/10 rounded-lg p-3">
-          Live reads unavailable ({(query.error as Error).message}).
+        <div className="text-xs text-amber-300/90 border border-amber-500/20 bg-amber-500/5 rounded-md p-3">
+          <span className="font-semibold">Live reads unavailable.</span>
           <br />
-          Plugin query routes (/v1/query/*) are a pending protocol increment. Writes remain available in Admin.
+          <span className="text-amber-400/70">Plugin query routes (/v1/query/*) are a pending protocol increment. Writes remain available in Admin.</span>
         </div>
       )}
       {query.data != null && <div className="animate-fade-up opacity-0">{render(query.data)}</div>}

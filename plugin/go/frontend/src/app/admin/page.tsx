@@ -362,10 +362,10 @@ function AdminPageInner() {
             <option value={3}>Gate: OPEN</option>
             <option value={2} disabled>Gate: ATTESTER (phase 2)</option>
           </select>
-          <button onClick={buildRegister} className="w-full py-2 px-4 bg-gradient-to-r from-emerald-500 to-indigo-600 text-white font-semibold rounded-lg hover:opacity-90 transition">
+          <button onClick={buildRegister} className="w-full py-2 px-4 btn-primary transition">
             Preview Register Asset
           </button>
-          <button onClick={buildGate} className="w-full py-2 px-4 border border-white/10 text-gray-300 rounded-lg hover:bg-white/5 transition">
+          <button onClick={buildGate} className="w-full py-2 px-4 btn-secondary transition">
             Preview Set Gate
           </button>
         </section>
@@ -440,7 +440,7 @@ function AdminPageInner() {
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="w-full py-2 px-4 bg-gradient-to-r from-emerald-600 to-indigo-700 text-white font-semibold rounded-lg hover:opacity-90 transition disabled:opacity-50"
+            className="w-full py-2 px-4 btn-primary disabled:opacity-50"
           >
             {submitting ? "Signing & Submitting..." : "Sign & Submit Transaction"}
           </button>
