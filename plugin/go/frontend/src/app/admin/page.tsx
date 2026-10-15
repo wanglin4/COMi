@@ -7,7 +7,6 @@ import { buildAndSignTransaction, getAccountNonce, submitTransaction } from "@/l
 const inputCls =
   "w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm focus:outline-none focus:border-emerald-500/50";
 
-// Protocol rules mirrored from plugin/go README + registry.go ValidateRegisterAsset
 const SYMBOL_RE = /^[A-Z][A-Z0-9]{1,11}$/;
 const RESERVED = ["CUSD", "CNPY"];
 const HEX40 = /^[0-9a-fA-F]{40}$/;
@@ -44,75 +43,9 @@ export default function AdminPage() {
   const [gateError, setGateError] = useState<string | null>(null);
 
   const [payload, setPayload] = useState<string | null>(null);
-
-  if (!ethAddress) {
-  
   const [submitting, setSubmitting] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
-
-  const submitTransaction = async () => {
-    if (!payload || !ethAddress) return;
-    
-    setSubmitting(true);
-    setSubmitError(null);
-    setTxHash(null);
-    
-    try {
-      // Parse the payload
-      const txData = JSON.parse(payload);
-      
-      // Get nonce from chain
-      const rpcUrl = process.env.NEXT_PUBLIC_NODE_RPC_URL || "http://localhost:8545";
-      const nonce = await getAccountNonce(ethAddress, rpcUrl);
-      
-      // Build and sign transaction
-      const signedTx = await buildAndSignTransaction(
-        {
-          messageType: txData.message_type,
-          msg: txData.msg,
-          typeUrl: txData.type_url,
-          signer: ethAddress,
-          nonce: nonce + 1,
-          fee: 10000,
-          networkId: 1,
-          chainId: 1,
-          createdHeight: 0,
-        },
-        ethAddress,
-        window.ethereum
-      );
-      
-      // Submit to chain
-      const hash = await submitTransaction(signedTx, rpcUrl);
-      setTxHash(hash);
-    } catch (e: any) {
-      setSubmitError(e.message || "Submission failed");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-      <main className="flex min-h-screen items-center justify-center p-6">
-        <div className="glass-card p-8 max-w-md text-center">
-          <h1 className="text-xl font-semibold mb-2">Connect first</h1>
-          <p className="text-sm text-gray-400">Connect your wallet on the home page to access the console.</p>
-        </div>
-      </main>
-    );
-  }
-
-  if (!isAuthority) {
-    return (
-      <main className="flex min-h-screen items-center justify-center p-6">
-        <div className="glass-card p-8 max-w-md text-center">
-          <h1 className="text-xl font-semibold mb-2 text-red-300">403 — Authority only</h1>
-          <p className="text-sm text-gray-400">This console is gated to the protocol authority address.</p>
-        </div>
-      </main>
-    );
-  }
 
   const buildRegister = () => {
     const sym = symbol.toUpperCase();
@@ -160,6 +93,65 @@ export default function AdminPage() {
       )
     );
   };
+
+  const handleSubmit = async () => {
+    if (!payload || !ethAddress) return;
+    
+    setSubmitting(true);
+    setSubmitError(null);
+    setTxHash(null);
+    
+    try {
+      const txData = JSON.parse(payload);
+      const rpcUrl = process.env.NEXT_PUBLIC_NODE_RPC_URL || "http://localhost:8545";
+      const nonce = await getAccountNonce(ethAddress, rpcUrl);
+      
+      const signedTx = await buildAndSignTransaction(
+        {
+          messageType: txData.message_type,
+          msg: txData.msg,
+          typeUrl: txData.type_url,
+          signer: ethAddress,
+          nonce: nonce + 1,
+          fee: 10000,
+          networkId: 1,
+          chainId: 1,
+          createdHeight: 0,
+        },
+        ethAddress,
+        window.ethereum
+      );
+      
+      const hash = await submitTransaction(signedTx, rpcUrl);
+      setTxHash(hash);
+    } catch (e: any) {
+      setSubmitError(e.message || "Submission failed");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!ethAddress) {
+    return (
+      <main className="flex min-h-screen items-center justify-center p-6">
+        <div className="glass-card p-8 max-w-md text-center">
+          <h1 className="text-xl font-semibold mb-2">Connect first</h1>
+          <p className="text-sm text-gray-400">Connect your wallet on the home page to access the console.</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!isAuthority) {
+    return (
+      <main className="flex min-h-screen items-center justify-center p-6">
+        <div className="glass-card p-8 max-w-md text-center">
+          <h1 className="text-xl font-semibold mb-2 text-red-300">403 — Authority only</h1>
+          <p className="text-sm text-gray-400">This console is gated to the protocol authority address.</p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-3xl p-4 pt-24 pb-24 space-y-6">
@@ -214,8 +206,9 @@ export default function AdminPage() {
 
       {payload && (
         <div className="space-y-2">
+          <pre className="glass-card p-4 text-xs overflow-x-auto text-gray-300 animate-fade-up opacity-0">{payload}</pre>
           <button
-            onClick={submitTransaction}
+            onClick={handleSubmit}
             disabled={submitting}
             className="w-full py-2 px-4 bg-gradient-to-r from-emerald-600 to-indigo-700 text-white font-semibold rounded-lg hover:opacity-90 transition disabled:opacity-50"
           >
@@ -229,9 +222,6 @@ export default function AdminPage() {
             </div>
           )}
         </div>
-      )}
-      {false && (
-        <pre className="glass-card p-4 text-xs overflow-x-auto text-gray-300 animate-fade-up opacity-0">{payload}</pre>
       )}
     </main>
   );
