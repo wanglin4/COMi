@@ -173,6 +173,8 @@ func (p *Plugin) ListenForInbound() {
 					response = &PluginToFSM_Genesis{c.Genesis(msg.GetGenesis())}
 				case *FSMToPlugin_Begin:
 					log.Println("Received begin request from FSM")
+					// remember the block height so the query API can answer height dependent questions
+					noteHeight(msg.GetBegin().GetHeight())
 					response = &PluginToFSM_Begin{c.BeginBlock(msg.GetBegin())}
 				case *FSMToPlugin_Check:
 					log.Println("Received check request from FSM")

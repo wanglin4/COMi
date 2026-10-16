@@ -64,6 +64,33 @@ Known limits of this step: there is no bad-debt waterfall or reserve fund yet (a
 - A seller keeps what it earned before selling, even with a zero balance. A holder revoked from the bond's gate or the cUSD gate cannot claim until re-allowed.
 - Asserted in the tests after every operation: escrow equals `funded - claimed`, and everything holders could still claim fits inside it. A randomized test drives issues, transfers, trades, funding and claims and checks each holder was paid at most its exact share.
 
+## Query API
+
+`query.go`. The plugin serves a read-only HTTP API on its RPC address (`rpcAddress`, default `0.0.0.0:50010`), backed by Canopy's `QueryState` at the latest committed state. `GET /v1/query` lists every route; all are GET, none can write.
+
+| Route | Parameters | Returns |
+| --- | --- | --- |
+| `status` | | build, latest block height, admin, asset and order counts |
+| `assets` | `from`, `limit` | a page of the asset registry with units issued |
+| `asset` | `id` or `symbol` | asset, units issued and in order escrow, NAV, oracle price, bond yield pool |
+| `gate` | `asset_id`, `address` | whether the address passes the gate (`asset_id=0` is the cUSD allowlist) |
+| `gates` | `asset_id`, `limit` | allowlisted addresses of an asset |
+| `cusd` | | params, CNPY price record with age and freshness, total debt |
+| `account` | `address` | CNPY, cUSD, vault with collateral ratio and `liquidatable`, cUSD gate status |
+| `holding` | `asset_id`, `address` | balance of one asset and gate status |
+| `holdings` | `address`, `from`, `limit` | non-zero balances across the registry |
+| `holders` | `asset_id`, `limit` | addresses holding an asset (the order escrow is flagged) |
+| `order` | `id` | one resting order |
+| `orders` | `owner`, `limit` | an owner's resting orders |
+| `book` | `asset_id`, `limit` | best resting orders and price levels per side |
+| `oracle` | optional `asset_id` | reporters and reports; with `asset_id`, that asset's trade history and price |
+| `nav` | `asset_id` | NAV record of a tier-one asset |
+| `yield` | `asset_id`, optional `address` | bond yield pool; with `address`, its claimable yield |
+
+Conventions: uint64 values are decimal **strings** (JSON numbers lose precision above 2^53); small counts such as bps and tier are numbers; addresses and bytes are lowercase hex (a `0x` prefix is accepted in requests); enums are names; a missing record is `null`, a missing asset or order a 404; errors are `{"error", "code"}` with status 400, 404 or 502. Lists take `limit` (default 50, max 200; book depth max 100) and say when they were cut short (`truncated`, or `next` for registry pages). CORS is open (`*`) because everything served is public chain state.
+
+Canopy's query API does not return a block height, so the plugin remembers the latest block it was asked to begin. Until the first block after a restart, `heightKnown` is false and anything that depends on the current height (price freshness, asset oracle price, `liquidatable`) is `null` rather than guessed.
+
 ## The gate
 
 `gate.go` is the single check every asset-touching transaction must call: `RequireAllowed(state, assetId, addr)`. Phase 1 implements `ALLOWLIST` (admin managed) and `OPEN`. `ATTESTER` plugs in by implementing the `Gate` interface and flipping `attesterGateEnabled`; no caller changes.
@@ -118,5 +145,4 @@ The binary keeps the name `go-plugin` because Canopy's `pluginctl.sh` and the Do
 - Using tier-one assets as cUSD collateral (NAV and the asset oracle exist, but nothing consumes them yet), synthetics (phase 2) and the attester gate.
 - Frontend forms for `set_cusd_params`, `post_price`, `set_oracle`, `issue_units`, `transfer_units`, `post_nav`, `fund_yield` and `claim_yield`.
 - Bad-debt waterfall, reserve fund and fee accounting (design steps for later).
-- Read-only query RPC (`/v1/query/asset`, gate lookups) via `QueryState`.
 - No integration test against a running Canopy node yet.

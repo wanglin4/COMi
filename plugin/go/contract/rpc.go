@@ -15,7 +15,7 @@ Canopy core only exposes a single, generic, read-only transport over the unix so
 as many routes as they want and decode their own keys/protobufs into whatever response shapes they
 like. Canopy never needs to know about chain-specific endpoints.
 
-No routes are registered by default. See TUTORIAL.md ("Custom RPC endpoints") for a full, worked
+COMi registers its read-only query routes from query.go (see /v1/query for the list). See TUTORIAL.md ("Custom RPC endpoints") for a full, worked
 example you can follow to add your own handlers backed by QueryState.
 */
 
@@ -38,8 +38,10 @@ func (p *Plugin) StartRPCServer() {
 	//   })
 	//
 	mux := http.NewServeMux()
+	// the read-only query API (query.go), backed by QueryState at the latest committed state
+	newQueryMux(mux, &chainReader{p: p}, LatestHeight, PluginBuild)
 	// log the build marker so the running version is obvious in the log
-	log.Printf("plugin RPC server (%s) listening on %s (no custom routes registered)", PluginBuild, addr)
+	log.Printf("plugin RPC server (%s) listening on %s (query routes under /v1/query)", PluginBuild, addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Printf("plugin RPC server error: %v", err)
 	}
